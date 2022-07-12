@@ -24,15 +24,16 @@ bool Context::Init()
     if(!FluidProgram) return false;
 
 
-    // Particle => Box 로 표현하자
-    BoxMesh = Mesh::CreateBox();
-
-
     // Particle 들의 움직임을 계산하는 컴퓨트 셰이더
     FluidComputeShader = Shader::CreateFromFile("./shader/fluid.compute", GL_COMPUTE_SHADER);
     // 해당 셰이더를 담는 프로그램 생성
     ComputeProgram = Program::Create({FluidComputeShader});
     if(!ComputeProgram) return false;
+
+
+    
+    // Particle => Box 로 표현하자
+    BoxMesh = Mesh::CreateBox();
 
 
     // Particle 들의 초기 정보를 초기화 한다
@@ -43,7 +44,12 @@ bool Context::Init()
     ParticleBuffer = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, ParticleArray.data(), sizeof(Particle), ParticleArray.size());
     
     // SSBO 버퍼 바인딩
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Particle_Binding_Index, ParticleBuffer->Get());
+
     
+    // 컴퓨트 프로그램과 SSBO 를 연결
+    auto blockIndex = glGetProgramResourceIndex(ComputeProgram->Get(), GL_SHADER_STORAGE_BUFFER, "ParticleBuffer");
+    glShaderStorageBlockBinding(ComputeProgram->Get(), blockIndex, Particle_Binding_Index);
 
 
     return true;
@@ -104,6 +110,24 @@ void Context::MouseButton(int button, int action, double x, double y)
 
 void Context::Render()
 {
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
+
+    // 카메라 설정, 위치 등을 확정
+    auto projection = glm::perspective
+    (
+        glm::radians(45.0f),
+        (float)m_width / (float)m_height,
+        0.01f, 100.0f
+    );
+
+    auto view = glm::lookAt
+    (
+        glm::vec3(0.0f, 0.0f, -5.0f),
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 1.0f, 0.0f)
+    );
+
     // Compute Program 을 실행 => 각 Particle 의 데이터를 계산한다
         // Particles 의 위치를 저장하는 배열을 이용해서 계산, 접근
         // 계산 결과 데이터 => Particles 의 위치가 저장된 3-4 차 배열에 담겨서 나온다
@@ -119,4 +143,18 @@ void Context::Render()
     // 마지막으로 Map 에 저장된 Particle 을 차례대로 돌면서
     // 카메라에서 멀리 떨어진 Particle 부터 그린다
 
+
+    FluidProgram->Use();
+        for(auto p : ParticleArray)
+        {
+            auto modelTransform = glm::translate(glm::mat4(1.0f), p.Position);
+            auto transform = projection * view * modelTransform;
+
+            FluidProgram->SetUniform("transform", transform);
+
+            BoxMesh->Draw(FluidProgram.get());
+        }
+    glUseProgram(0);
+
+    
 }
