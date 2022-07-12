@@ -19,15 +19,59 @@ bool Context::Init()
     SPDLOG_INFO("size of float is {}", sizeof(float));
     SPDLOG_INFO("size of Particle is {} and count is {}", sizeof(Particle), (sizeof(Particle) / sizeof(float)));
 
+    // Fluid 를 그리는 프로그램
+    FluidProgram = Program::Create("./shader/fluid.vs", "./shader/fluid.fs");
+    if(!FluidProgram) return false;
 
-    // Particle 들의 움직임을 계산하는 셰이더를 만든다
 
+    // Particle => Box 로 표현하자
+    BoxMesh = Mesh::CreateBox();
+
+
+    // Particle 들의 움직임을 계산하는 컴퓨트 셰이더
+    FluidComputeShader = Shader::CreateFromFile("./shader/fluid.compute", GL_COMPUTE_SHADER);
     // 해당 셰이더를 담는 프로그램 생성
+    ComputeProgram = Program::Create({FluidComputeShader});
+    if(!ComputeProgram) return false;
+
+
+    // Particle 들의 초기 정보를 초기화 한다
+    InitParticles();
+
+
+    // GPU 에서 데이터를 저장할 SSBO 버퍼를 생성, 초기화한 Particles 정보를 복사 => GPU 에 넣는다
+    ParticleBuffer = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, ParticleArray.data(), sizeof(Particle), ParticleArray.size());
+    
+    // SSBO 버퍼 바인딩
+    
+
 
     return true;
 }
 
 
+
+
+// 정해진 Range 에 Particles 를 집어 넣는다
+void Context::InitParticles()
+{
+    // Particle::Fluid Range 기준으로 해서, 파티클들을 균등하게 위치 시킨다
+    float xStride = Particle::FluidRange.x / (Particle::ParticleCount.x + 1);
+    float yStride = Particle::FluidRange.y / (Particle::ParticleCount.y + 1);
+    float zStride = Particle::FluidRange.z / (Particle::ParticleCount.z + 1);
+
+
+    for(int xCount = 1; xCount <= Particle::ParticleCount.x; xCount++)
+    {
+        for(int yCount = 1; yCount <= Particle::ParticleCount.y; yCount++)
+        {
+            for(int zCount = 1; zCount <= Particle::ParticleCount.z; zCount++)
+            {
+                ParticleArray.push_back( Particle(glm::vec3((xStride * xCount, yStride * yCount, zStride * zCount))) );
+            }
+        }
+    }
+}
 
 
 

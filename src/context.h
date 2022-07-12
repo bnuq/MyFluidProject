@@ -44,12 +44,15 @@ private:
     // Mouse
     glm::vec2 m_prevMousePos { glm::vec2(0.0f) };
 
-    // Programs => 유체를 그려내는 프로그램 하나만 존재
+    // Programs => 유체를 그려내는 프로그램, 유체를 계산하는 프로그램
     ProgramUPtr FluidProgram;
+    ProgramUPtr ComputeProgram;
+
 
     // Meshes => 모든 유체는 박스의 형태로만 표현
     MeshUPtr BoxMesh;
     
+
     // Material => 유체의 색을 표현하는 데 텍스처는 따로 쓰지 않는다
     
     // 카메라 객체
@@ -78,9 +81,14 @@ private:
     // 유체의 움직임을 계산하는 Compute Shader
     ShaderPtr FluidComputeShader;
 
+
     // 유체를 구성하는 Particle Struct
     // Particle 데이터를 저장하는 배열 => CPU
     std::vector<Particle> ParticleArray{};
+
+    // Particle 들의 초기 위치 값을 넣는 함수
+    void InitParticles();
+    
 
     // Particle 데이터를 저장하는 SSBO 버퍼 => GPU
     BufferPtr ParticleBuffer;

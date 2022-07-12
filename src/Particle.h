@@ -22,7 +22,16 @@ public:
     //particle surface normal, 표면장력
     glm::vec3 surfNormal = glm::vec3(0.0f, 0.0f, 0.0f);
 
-    static int ParticleCount;
+
+
+    // Fluid 가 담기는 영역
+    static glm::vec3 FluidRange;
+    
+    // Particle 들이 몇 개 존재하는 지, 영역
+    static glm::uvec3 ParticleCount;
+    
+    // Particle 들의 총 개수 => 삭제 예정
+    static int TotalParticleCount;
 };
 
 
