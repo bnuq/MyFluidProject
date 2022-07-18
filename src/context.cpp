@@ -16,6 +16,12 @@ bool Context::Init()
 {
     glClearColor(0.1f, 0.2f, 0.3f, 0.0f);
 
+    // 카메라 객체 초기화
+    MainCam = Camera::Create();
+    if(MainCam == nullptr)
+        SPDLOG_INFO("NULLPTR camera");
+
+
     SPDLOG_INFO("size of float is {}", sizeof(float));
     SPDLOG_INFO("size of Particle is {} and count is {}", sizeof(Particle), (sizeof(Particle) / sizeof(float)));
 
@@ -61,21 +67,28 @@ bool Context::Init()
 // 정해진 Range 에 Particles 를 집어 넣는다
 void Context::InitParticles()
 {
-    // Particle::Fluid Range 기준으로 해서, 파티클들을 균등하게 위치 시킨다
+    // Particle::Fluid Range 를 균등하게 나눈다, Particle 들이 들어갈 수 있도록
     float xStride = Particle::FluidRange.x / (Particle::ParticleCount.x + 1);
     float yStride = Particle::FluidRange.y / (Particle::ParticleCount.y + 1);
     float zStride = Particle::FluidRange.z / (Particle::ParticleCount.z + 1);
 
 
-    for(int xCount = 1; xCount <= Particle::ParticleCount.x; xCount++)
+    for(unsigned int xCount = 1; xCount <= Particle::ParticleCount.x; xCount++)
     {
-        for(int yCount = 1; yCount <= Particle::ParticleCount.y; yCount++)
+        for(unsigned int yCount = 1; yCount <= Particle::ParticleCount.y; yCount++)
         {
-            for(int zCount = 1; zCount <= Particle::ParticleCount.z; zCount++)
+            for(unsigned int zCount = 1; zCount <= Particle::ParticleCount.z; zCount++)
             {
-                ParticleArray.push_back( Particle(glm::vec3((xStride * xCount, yStride * yCount, zStride * zCount))) );
+                ParticleArray.push_back( Particle(glm::vec3(xStride * xCount, yStride * yCount, zStride * zCount)) );
             }
         }
+    }
+
+
+
+    for(auto p : ParticleArray)
+    {
+        SPDLOG_INFO("{}, {}, {}", p.Position.x, p.Position.y, p.Position.z);
     }
 }
 
@@ -84,7 +97,21 @@ void Context::InitParticles()
 
 void Context::ProcessInput(GLFWwindow* window)
 {
-    
+    if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        MainCam->Move(GLFW_KEY_W);
+    if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        MainCam->Move(GLFW_KEY_S);
+
+    if(glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        MainCam->Move(GLFW_KEY_A);
+    if(glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        MainCam->Move(GLFW_KEY_D);
+
+    if(glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+        MainCam->Move(GLFW_KEY_Q);
+    if(glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+        MainCam->Move(GLFW_KEY_E);
+
 }
 void Context::Reshape(int width, int height)
 {
@@ -97,11 +124,30 @@ void Context::Reshape(int width, int height)
 }
 void Context::MouseMove(double x, double y)
 {
-    
+    if(!m_cameraControl) return;
+
+
+    auto pos = glm::vec2((float)x, (float)y);
+    auto deltaPos = pos - m_prevMousePos;
+
+    MainCam->Rotate(deltaPos);
+    m_prevMousePos = pos;
 }
 void Context::MouseButton(int button, int action, double x, double y)
 {
-    
+    if (button == GLFW_MOUSE_BUTTON_RIGHT)  // 우측 키 클릭
+    {
+        if (action == GLFW_PRESS)
+        {
+            // 마우스 조작 시작 시점에 현재 마우스 커서 위치 저장
+            m_prevMousePos = glm::vec2((float)x, (float)y);
+            m_cameraControl = true;
+        }
+        else if (action == GLFW_RELEASE)
+        {
+            m_cameraControl = false;
+        }
+    }
 }
 
 
@@ -118,14 +164,16 @@ void Context::Render()
     (
         glm::radians(45.0f),
         (float)m_width / (float)m_height,
-        0.01f, 100.0f
+        0.01f, 500.0f
     );
 
     auto view = glm::lookAt
     (
-        glm::vec3(0.0f, 0.0f, -5.0f),
-        glm::vec3(0.0f, 0.0f, 0.0f),
-        glm::vec3(0.0f, 1.0f, 0.0f)
+        //glm::vec3(0, 0, -5.0f),
+        MainCam->Position,
+        //glm::vec3(0.0f, 0.0f, 0.0f),
+        MainCam->Position + MainCam->DirVec,
+        MainCam->UpVec
     );
 
     // Compute Program 을 실행 => 각 Particle 의 데이터를 계산한다

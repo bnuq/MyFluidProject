@@ -12,8 +12,8 @@
 #include "mesh.h"
 #include "framebuffer.h"
 
-//#include "Camera.h"
 
+#include "Camera.h"
 #include "Particle.h"
 
 
@@ -56,7 +56,7 @@ private:
     // Material => 유체의 색을 표현하는 데 텍스처는 따로 쓰지 않는다
     
     // 카메라 객체
-    //CameraPtr MainCam;
+    CameraPtr MainCam;
     glm::vec3 m_cameraPos { glm::vec3(0.0f, 2.5f, 8.0f) }; // 일단 light 계산에 사용
     bool m_cameraControl { false };
 

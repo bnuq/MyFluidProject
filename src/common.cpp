@@ -2,7 +2,7 @@
 #include <fstream>  // File Stream
 #include <sstream>  // String Stream
 
-// std::optional => value ë¥¼ ë¦¬í„´í•˜ë©´, ìë™ìœ¼ë¡œ optional ì„ ê°ì‹¸ì„œ ë¦¬í„´í•œë‹¤
+// std::optional
 std::optional<std::string> LoadTextFile(const std::string& filename)
 {    
     // ifstream = file loading,  file -> stream
@@ -15,13 +15,16 @@ std::optional<std::string> LoadTextFile(const std::string& filename)
 
     std::stringstream text{};
 
-    // ifstream::rdbuf() => stream buffer ë¥¼ ë¦¬í„´ => String Stream ì— ë„£ì„ ìˆ˜ ìˆë‹¤
+    // ifstream::rdbuf() => stream buffer ¸¦ ¸®ÅÏ => String Stream
     text << fin.rdbuf();
 
-    // stringstream::str() => ë²„í¼ì— ì €ì¥ëœ string ì„ ë¦¬í„´
+    // stringstream::str() => ¹öÆÛ??? ????????? string ??? ¸®ÅÏ
     return text.str();
 }
 
+
+
+// °Å¸®¿¡ µû¸¥ ºûÀÇ °¨¼è¸¦ °è»ê
 glm::vec3 GetAttenuationCoeff(float distance)
 {
     const auto linear_coeff = glm::vec4(
@@ -38,6 +41,5 @@ glm::vec3 GetAttenuationCoeff(float distance)
     float kl = glm::dot(linear_coeff, dvec);
     float kq = glm::dot(quad_coeff, dvec);
 
-    // ìƒìˆ˜ë¡œ ì´ë¤„ì§„ ë²¡í„°ë¥¼ ë¦¬í„´
     return glm::vec3(kc, glm::max(kl, 0.0f), glm::max(kq*kq, 0.0f));
 }

@@ -49,7 +49,7 @@ add_executable(
     src/framebuffer.cpp         src/framebuffer.h
 
     src/Particle.cpp            src/Particle.h
-    #src/Camera.cpp              src/Camera.h
+    src/Camera.cpp              src/Camera.h
 )
 
 
