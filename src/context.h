@@ -95,7 +95,7 @@ private:
         bool operator()(const Particle& p1, const Particle& p2)
         {
             // 카메라까지의 거리가 짧은 것 => 긴 것, 순서로 정렬된다
-            return p1.property.z < p2.property.z;
+            return (p1.ToCamera - p2.ToCamera) > 0;
         }
     };
     

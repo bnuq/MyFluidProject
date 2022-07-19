@@ -3,7 +3,7 @@
 Particle::Particle(glm::vec4 pos, glm::vec3 camPos)
 : Position( pos )
 {
-    property.z = glm::distance(glm::vec3(Position.x, Position.y, Position.z), camPos);
+    ToCamera = glm::distance(glm::vec3(Position.x, Position.y, Position.z), camPos);
 }
 
 
