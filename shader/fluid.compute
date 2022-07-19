@@ -1,26 +1,67 @@
 #version 460 core
 
-layout( local_size_x = 1 ) in;
+layout(local_size_x = 8, local_size_y = 1, local_size_z = 1) in;
 
 
-struct Particle
+struct InParticle
 {
-    vec3 Position;
-    vec3 Velocity;
-    vec3 force;
-    vec3 surfNormal;
-    float density;
-    float pressure;
-    float padding;
+    vec4 Position;
+    vec4 Velocity;
+    vec4 force;
+    vec4 surfNormal;
+    float one;
+    float two;
+    float three;
+    float four;
+};
+layout(std430, binding = 1) buffer InputBuffer
+{
+    InParticle inputData[];
 };
 
-layout(std430, binding = 1) buffer ParticleBuffer
+
+struct OutParticle
 {
-    Particle data[];
+    vec4 Position;
+    vec4 Velocity;
+    vec4 force;
+    vec4 surfNormal;
+    float one;
+    float two;
+    float three;
+    float four;
 };
+layout(std430, binding = 2) buffer OutputBuffer
+{
+    OutParticle outputData[];
+};
+
+
+uniform vec3 CameraPos;
 
 
 void main()
 {
+    // 일단 input 내용을 그대로 output 에 넣는 방식으로 진행
+    // 동일하게 하나의 그룹은 x 축 방향만 가지고 있고, x 축 방향 그룹만 존재한다고 생각
+    //uint Index = gl_GlobalInvocationID.x;
 
+    //Particle curParticle = inputData[Index];
+
+        //curParticle.ToCamera = distance(CameraPos, curParticle.Position);
+        //curParticle.ToCamera = 0;
+
+    //outputData[Index] = curParticle;
+    //outputData[Index].property.z = 0;
+
+    //inputData[0].property.z = 0;
+    uint Index = gl_GlobalInvocationID.x;
+    outputData[Index].Position.xyz = gl_GlobalInvocationID;
+    outputData[Index].Velocity.xyz = gl_GlobalInvocationID;
+    outputData[Index].force.xyz = gl_GlobalInvocationID;
+    outputData[Index].surfNormal.xyz = gl_GlobalInvocationID;
+    outputData[Index].one = -1;
+    outputData[Index].two = -2;
+    outputData[Index].three = -3;
+    outputData[Index].four = -4;
 }

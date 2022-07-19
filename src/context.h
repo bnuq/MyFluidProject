@@ -88,13 +88,35 @@ private:
 
     // Particle 들의 초기 위치 값을 넣는 함수
     void InitParticles();
+
+    // Particle 들을 카메라 까지의 거리로 정렬하는 function object
+    struct ParticleCompare
+    {
+        bool operator()(const Particle& p1, const Particle& p2)
+        {
+            // 카메라까지의 거리가 짧은 것 => 긴 것, 순서로 정렬된다
+            return p1.property.z < p2.property.z;
+        }
+    };
     
 
-    // Particle 데이터를 저장하는 SSBO 버퍼 => GPU
-    BufferPtr ParticleBuffer;
-    unsigned int Particle_Binding_Index = 1;
 
 
+    /*  SSBO Buffer
+
+        Particle 데이터를 저장하는 SSBO 버퍼 => GPU 에서 정보를 저장
+        같은 버퍼를 2개 생성한다
+        한쪽에서 읽고, 다른 쪽으로 출력해
+        이후 두 버퍼를 스왑, Compute Program 에 입력과 출력이 번갈아서 연결되도록 한다
+     */
+    BufferPtr ParticleBufferRed;
+    BufferPtr ParticleBufferBlack;
+
+    unsigned int Binding_Index_One = 1;
+    unsigned int Binding_Index_Two = 2;
+
+    // Red Buffer 가 input 으로 들어간 상태다
+    bool RedBufferInput = true;
 
 };
 
