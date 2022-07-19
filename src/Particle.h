@@ -7,6 +7,7 @@
 class Particle
 {
 public:
+    Particle() {}
     Particle(glm::vec4 pos, glm::vec3 camPos);
 
 

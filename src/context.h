@@ -86,6 +86,11 @@ private:
     // Particle 데이터를 저장하는 배열 => CPU
     std::vector<Particle> ParticleArray{};
 
+    // 출력 결과를 저장하는 CPU 벡터
+    std::vector<Particle> OutputParticles{};
+
+
+
     // Particle 들의 초기 위치 값을 넣는 함수
     void InitParticles();
 
