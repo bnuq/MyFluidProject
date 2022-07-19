@@ -136,9 +136,13 @@ void Context::InitParticles()
     // 카메라까지의 거리를 기준으로 정렬한다
     std::sort(ParticleArray.begin(), ParticleArray.end(), ParticleCompare());
 
+    // padding 자리에 id 를 부여
+    for(int i = 0; i < ParticleArray.size(); i++)
+        ParticleArray[i].padding = (i + 1);
+
 
     // 같은 크기로 output particles 배열을 확보
-    OutputParticles.resize(Particle::TotalParticleCount);
+    OutputParticles.resize(Particle::TotalParticleCount + 1);
 
     SPDLOG_INFO("Output Particle Size is {}", OutputParticles.size());
 }
@@ -209,7 +213,9 @@ void Context::Render()
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
     glEnable(GL_DEPTH_TEST);
-
+// 렌더링을 위한 설정
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 
     // 카메라 설정, 위치 등을 확정
@@ -274,9 +280,23 @@ void Context::Render()
 
 
             glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * Particle::TotalParticleCount, OutputParticles.data());
-            std::sort(OutputParticles.begin(), OutputParticles.end(), ParticleCompare());
-            //glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * Particle::TotalParticleCount, OutputParticles.data());
 
+            for(int i = 0; i < ParticleArray.size(); i++)
+                SPDLOG_INFO("{} th id {} / ToCamera {}", i, OutputParticles[i].padding, OutputParticles[i].ToCamera);
+
+
+            std::sort(OutputParticles.begin(), OutputParticles.end(), ParticleCompare());
+
+
+            SPDLOG_INFO("After Sort");
+            for(int i = 0; i < ParticleArray.size(); i++)
+                SPDLOG_INFO("{} th id {} / ToCamera {}", i, OutputParticles[i].padding, OutputParticles[i].ToCamera);
+
+            //glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * Particle::TotalParticleCount, OutputParticles.data());
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, inputBuffer->Get());
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * Particle::TotalParticleCount, OutputParticles.data());
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
     // 일단 실행만 하고
@@ -287,9 +307,7 @@ void Context::Render()
 
 
 
-    // 렌더링을 위한 설정
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    
 
     // output 버퍼에 저장된 데이터를 이용해서, Particles 를 그린다
     FluidProgram->Use();
@@ -306,11 +324,12 @@ void Context::Render()
                 FluidProgram->SetUniform("transform", transform);
 
                 BoxMesh->Draw(FluidProgram.get());
+
             }
 
     glUseProgram(0);
 
-    glDisable(GL_BLEND);
+    //glDisable(GL_BLEND);
 
     
 

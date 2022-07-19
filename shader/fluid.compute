@@ -34,8 +34,9 @@ void main()
     // 일단 input 내용을 그대로 output 에 넣는 방식으로 진행
     // 동일하게 하나의 그룹은 x 축 방향만 가지고 있고, x 축 방향 그룹만 존재한다고 생각
     uint Index = gl_GlobalInvocationID.x;
-    Particle curParticle = inputData[Index];
+        Particle curParticle = inputData[Index];
+        curParticle.ToCamera = distance(CameraPos, curParticle.Position.xyz);
 
-    outputData[Index].ToCamera = distance(CameraPos, curParticle.Position.xyz);
+    outputData[Index] = curParticle;
     //outputData[Index].padding = inputData[Index].padding + 1.0;
 }
