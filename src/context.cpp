@@ -115,10 +115,6 @@ void Context::InitParticles()
 
     // 카메라까지의 거리를 기준으로 정렬한다
     std::sort(ParticleArray.begin(), ParticleArray.end(), ParticleCompare());
-
-
-    // ParticleArray 와 같은 크기로 output particles 배열을 확보
-    OutputParticles.resize(ParticleArray.size());
 }
 
 
@@ -215,17 +211,17 @@ void Context::Render()
 
         
         // 프로그램을 실행시킨다
-        glDispatchCompute(27, 1, 1);
+        glDispatchCompute(1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
  
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, OutputBuffer->Get());
  
             // 연산 결과, Output 을 CPU 로 읽어오고
-            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * OutputParticles.size(), OutputParticles.data());
+            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
 
             // Camera 까지의 거리를 기준으로 sort
-            std::sort(OutputParticles.begin(), OutputParticles.end(), ParticleCompare());
+            std::sort(ParticleArray.begin(), ParticleArray.end(), ParticleCompare());
 
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
@@ -233,7 +229,7 @@ void Context::Render()
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, InputBuffer->Get());
             
             // sort 한 결과를 input buffer 에 넣는다
-            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * OutputParticles.size(), OutputParticles.data());
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
 
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
@@ -242,6 +238,30 @@ void Context::Render()
 
 
     
+    /* 
+        Output 버퍼에 들어있는 데이터들에서 한번더 정렬을 해야할 듯?
+        그냥 루프를 도는 횟수를 줄이는 게 가장 좋다, 배열을 줄이는 게 가장 좋다
+
+        표면 Particle 의 개수를 미리 알고 있다고 가정 -
+            Compute Shader 에서 계산할 수 있다고 생각
+            Draw Call 하는 개수가 되는 것
+
+        이미 정렬된 Particle Array = 멀리 있는 것 => 가까이 있는 것, 순서로 들어있다
+            뒤쪽에서 표면 Particle 의 개수 ~ 끝 까지 Draw Call 을 하면
+            그정도 카메라에서 가까운 Particle 들이 출력되는 데
+                가까이 있는 데 표면은 아닌 데이터가 있을 거 아니냐
+                그런건 거르고 싶다
+
+            표면이 아니면 무조건 뒤로 빼고
+            표면이면서
+                카메라로부터 거리가 먼 것을 앞으로 빼는 정렬
+            [    표면    ][비표면]
+             먼 -> 가까움
+             표면 개수만큼 존재
+
+            <------------> 딱 이 정도만 Draw Call 하면 되지 않을까?
+     */
+
 
 
 
@@ -255,7 +275,7 @@ void Context::Render()
             // 정렬한 데이터를 이용해서, 카메라에서 가까운 것 부터 렌더링을 진행
             for(int i = 0; i < Particle::TotalParticleCount; i++)
             {
-                auto ParticlePos = glm::vec3(OutputParticles[i].Position.x, OutputParticles[i].Position.y, OutputParticles[i].Position.z);
+                auto ParticlePos = glm::vec3(ParticleArray[i].Position.x, ParticleArray[i].Position.y, ParticleArray[i].Position.z);
 
                 auto modelTransform = glm::translate(glm::mat4(1.0f), ParticlePos);
                 auto transform = projection * view * modelTransform;

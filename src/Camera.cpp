@@ -25,6 +25,7 @@ void Camera::Rotate(glm::vec2 deltaPos)
 
     // Direction 세팅
     auto pitchRotate = glm::rotate(glm::mat4(1.0f), glm::radians(pitchAngle), LeftVec); // 바뀐 LeftVec 에 대해서
+    FrontVec = glm::vec3(pitchRotate * glm::vec4(FrontVec, 0.0f));
     DirVec = glm::vec3(pitchRotate * glm::vec4(DirVec, 0.0f));
 }
 
