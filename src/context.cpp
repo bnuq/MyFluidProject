@@ -21,13 +21,9 @@ bool Context::Init()
     MainCam = Camera::Create();
 
 
-
-
     // Fluid 를 그리는 프로그램
     FluidProgram = Program::Create("./shader/fluid.vs", "./shader/fluid.fs");
     if(!FluidProgram) return false;
-
-
 
 
     // Particle 들의 움직임을 계산하는 컴퓨트 셰이더
@@ -52,9 +48,9 @@ bool Context::Init()
 
     // GPU 에서 데이터를 저장할 SSBO 버퍼를 생성, 초기화한 Particles 정보를 복사 => GPU 에 넣는다
     // 버퍼 2개 모두 처음에 동일하게 초기화한다
-    ParticleBufferRed 
+    InputBuffer 
         = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, ParticleArray.data(), sizeof(Particle), ParticleArray.size());
-    ParticleBufferBlack 
+    OutputBuffer
         = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, ParticleArray.data(), sizeof(Particle), ParticleArray.size());
 
 
@@ -63,12 +59,11 @@ bool Context::Init()
     /* 
         SSBO 버퍼를 각 인덱스에 바인딩
 
-        처음 세팅
-            Red Buffer   == 1 index
-            Black Buffer == 2 index
+        Input Buffer   == 1 index
+        Output Buffer  == 2 index
      */
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Binding_Index_One, ParticleBufferRed->Get());
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Binding_Index_Two, ParticleBufferBlack->Get());
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Input_Index, InputBuffer->Get());
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Output_Index, OutputBuffer->Get());
 
     
 
@@ -84,25 +79,10 @@ bool Context::Init()
      */
     GLuint blockIndex{};
     blockIndex = glGetProgramResourceIndex(ComputeProgram->Get(), GL_SHADER_STORAGE_BUFFER, "InputBuffer");
-    glShaderStorageBlockBinding(ComputeProgram->Get(), blockIndex, Binding_Index_One);
-    RedBufferInput = true;
+    glShaderStorageBlockBinding(ComputeProgram->Get(), blockIndex, Input_Index);
 
     blockIndex = glGetProgramResourceIndex(ComputeProgram->Get(), GL_SHADER_STORAGE_BUFFER, "OutputBuffer");
-    glShaderStorageBlockBinding(ComputeProgram->Get(), blockIndex, Binding_Index_Two);
-
-
-
-
-    
-
-
-
-    
-
-
-
-
-
+    glShaderStorageBlockBinding(ComputeProgram->Get(), blockIndex, Output_Index);
 
 
     return true;
@@ -136,18 +116,10 @@ void Context::InitParticles()
     // 카메라까지의 거리를 기준으로 정렬한다
     std::sort(ParticleArray.begin(), ParticleArray.end(), ParticleCompare());
 
-    // padding 자리에 id 를 부여
-    for(int i = 0; i < ParticleArray.size(); i++)
-        ParticleArray[i].padding = (i + 1);
 
-
-    // 같은 크기로 output particles 배열을 확보
-    OutputParticles.resize(Particle::TotalParticleCount + 1);
-
-    SPDLOG_INFO("Output Particle Size is {}", OutputParticles.size());
+    // ParticleArray 와 같은 크기로 output particles 배열을 확보
+    OutputParticles.resize(ParticleArray.size());
 }
-
-
 
 
 void Context::ProcessInput(GLFWwindow* window)
@@ -213,9 +185,7 @@ void Context::Render()
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
     glEnable(GL_DEPTH_TEST);
-// 렌더링을 위한 설정
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
 
 
     // 카메라 설정, 위치 등을 확정
@@ -235,11 +205,7 @@ void Context::Render()
         MainCam->UpVec
     );
 
-    // output buffer, input buffer 판단
-    BufferPtr outputBuffer = (RedBufferInput) ? ParticleBufferBlack : ParticleBufferRed;
-    BufferPtr inputBuffer  = (RedBufferInput) ? ParticleBufferRed   : ParticleBufferBlack;
-
-
+   
 
 
     // 렌더링 하기 전에, Compute Program 을 실행시킨다
@@ -249,54 +215,26 @@ void Context::Render()
 
         
         // 프로그램을 실행시킨다
-        glDispatchCompute(1, 1, 1);
+        glDispatchCompute(27, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-        // input 점검
-        // glBindBuffer(GL_SHADER_STORAGE_BUFFER, inputBuffer->Get());
-        //     Particle* particleData = (Particle*) glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_WRITE);
-        //     std::sort(particleData, particleData + Particle::TotalParticleCount, ParticleCompare());
-            
-        //     for(int i = 0; i < 4; i++)
-        //         SPDLOG_INFO("{} input data : {}", i, particleData[i].ToCamera);
+ 
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, OutputBuffer->Get());
+ 
+            // 연산 결과, Output 을 CPU 로 읽어오고
+            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * OutputParticles.size(), OutputParticles.data());
 
-        //     glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-        // glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-   
-        // output 점검
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, outputBuffer->Get());
-            // auto particleData = (Particle*) glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_WRITE);
-            
-            // //std::sort(particleData, particleData + Particle::TotalParticleCount, ParticleCompare());
-            // memcpy(particleData, OutputParticles.data(), sizeof(Particle) * OutputParticles.size());
-            // //std::sort(OutputParticles.begin(), OutputParticles.end(), ParticleCompare());
-            
-            // for(auto i : OutputParticles)
-            //     SPDLOG_INFO("{}", i.ToCamera);
-            // SPDLOG_INFO("END");
-
-        
-            // glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-
-
-            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * Particle::TotalParticleCount, OutputParticles.data());
-
-            for(int i = 0; i < ParticleArray.size(); i++)
-                SPDLOG_INFO("{} th id {} / ToCamera {}", i, OutputParticles[i].padding, OutputParticles[i].ToCamera);
-
-
+            // Camera 까지의 거리를 기준으로 sort
             std::sort(OutputParticles.begin(), OutputParticles.end(), ParticleCompare());
 
-
-            SPDLOG_INFO("After Sort");
-            for(int i = 0; i < ParticleArray.size(); i++)
-                SPDLOG_INFO("{} th id {} / ToCamera {}", i, OutputParticles[i].padding, OutputParticles[i].ToCamera);
-
-            //glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * Particle::TotalParticleCount, OutputParticles.data());
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, inputBuffer->Get());
-            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * Particle::TotalParticleCount, OutputParticles.data());
+
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, InputBuffer->Get());
+            
+            // sort 한 결과를 input buffer 에 넣는다
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * OutputParticles.size(), OutputParticles.data());
+
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
     // 일단 실행만 하고
@@ -307,21 +245,24 @@ void Context::Render()
 
 
 
-    
+    // 렌더링을 위한 설정
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // output 버퍼에 저장된 데이터를 이용해서, Particles 를 그린다
     FluidProgram->Use();
-                 
   
             // 정렬한 데이터를 이용해서, 카메라에서 가까운 것 부터 렌더링을 진행
             for(int i = 0; i < Particle::TotalParticleCount; i++)
             {
-                auto modelTransform = glm::translate(glm::mat4(1.0f), 
-                                        glm::vec3(OutputParticles[i].Position.x, OutputParticles[i].Position.y, OutputParticles[i].Position.z)
-                                    );
+                auto ParticlePos = glm::vec3(OutputParticles[i].Position.x, OutputParticles[i].Position.y, OutputParticles[i].Position.z);
+
+                auto modelTransform = glm::translate(glm::mat4(1.0f), ParticlePos);
                 auto transform = projection * view * modelTransform;
 
                 FluidProgram->SetUniform("transform", transform);
+                FluidProgram->SetUniform("ViewVec", glm::normalize(MainCam->Position - ParticlePos));
+
 
                 BoxMesh->Draw(FluidProgram.get());
 
@@ -329,19 +270,5 @@ void Context::Render()
 
     glUseProgram(0);
 
-    //glDisable(GL_BLEND);
-
-    
-
-    /* 
-        렌더링을 마친 후, input buffer 와 output buffer 를 바꾸는 작업을 진행한다
-
-        현재 output buffer => 다음 input buffer 가 되어야 한다 => binding = 1 에 연결시킨다
-        현재 input buffer => output buffer 가 되게 한다
-
-        red, black buffer 의 역할이 바뀌었을 것이므로, bool 타입 값을 뒤집어 준다
-     */
-    // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Binding_Index_One, outputBuffer->Get());
-    // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Binding_Index_Two, inputBuffer->Get());
-    // RedBufferInput = !RedBufferInput;
+    glDisable(GL_BLEND);
 }
