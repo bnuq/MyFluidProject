@@ -17,7 +17,7 @@ void Camera::Rotate(glm::vec2 deltaPos)
 
     FrontVec    = glm::vec3(yawRotate * glm::vec4(FrontVec, 0.0f));
     LeftVec     = glm::vec3(yawRotate * glm::vec4(LeftVec, 0.0f));
-    DirVec      = glm::vec3(yawRotate * glm::vec4(DirVec, 0.0f));
+    DirVec      = FrontVec;
 
     // pitchAngle 은 제한이 있다 + 값을 누적한다
     auto pitchAngle = (deltaPos.y) * pitchRotSpeed;
@@ -26,7 +26,7 @@ void Camera::Rotate(glm::vec2 deltaPos)
     // Direction 세팅
     auto pitchRotate = glm::rotate(glm::mat4(1.0f), glm::radians(pitchAngle), LeftVec); // 바뀐 LeftVec 에 대해서
     FrontVec = glm::vec3(pitchRotate * glm::vec4(FrontVec, 0.0f));
-    DirVec = glm::vec3(pitchRotate * glm::vec4(DirVec, 0.0f));
+    DirVec = FrontVec;
 }
 
 // 입력받은 키의 방향으로, 카메라의 위치가 이동, 좌표계는 변하지 않는다

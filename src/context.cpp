@@ -1,4 +1,5 @@
 #include "context.h"
+
 #include <vector>
 #include <string>
 #include <algorithm>
@@ -17,14 +18,11 @@ bool Context::Init()
 {
     glClearColor(0.1f, 0.2f, 0.3f, 0.0f);
 
-    // 카메라 객체 초기화
-    MainCam = Camera::Create();
 
-
+    // Initialize Programs
     // Fluid 를 그리는 프로그램
-    FluidProgram = Program::Create("./shader/fluid.vs", "./shader/fluid.fs");
-    if(!FluidProgram) return false;
-
+    DrawProgram = Program::Create("./shader/fluid.vs", "./shader/fluid.fs");
+    if(!DrawProgram) return false;
 
     // Particle 들의 움직임을 계산하는 컴퓨트 셰이더
     FluidComputeShader = Shader::CreateFromFile("./shader/fluid.compute", GL_COMPUTE_SHADER);
@@ -32,7 +30,16 @@ bool Context::Init()
     ComputeProgram = Program::Create({ FluidComputeShader });
     if(!ComputeProgram) return false;
 
+    // Particle 를 움직이는 셰이더
+    FluidMoveShader = Shader::CreateFromFile("./shader/fluidMove.compute", GL_COMPUTE_SHADER);
+    // 해당 셰이더를 담는 프로그램 생성
+    MoveProgram = Program::Create({ FluidMoveShader });
+    if(!MoveProgram) return false;
 
+
+
+    // 카메라 객체 초기화
+    MainCam = Camera::Create();
     
     // Particle => Box 로 표현하자
     BoxMesh = Mesh::CreateBox();
@@ -43,17 +50,12 @@ bool Context::Init()
     InitParticles();
 
 
-
-
-
     // GPU 에서 데이터를 저장할 SSBO 버퍼를 생성, 초기화한 Particles 정보를 복사 => GPU 에 넣는다
     // 버퍼 2개 모두 처음에 동일하게 초기화한다
     InputBuffer 
         = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, ParticleArray.data(), sizeof(Particle), ParticleArray.size());
     OutputBuffer
         = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, ParticleArray.data(), sizeof(Particle), ParticleArray.size());
-
-
 
     
     /* 
@@ -65,7 +67,6 @@ bool Context::Init()
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Input_Index, InputBuffer->Get());
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Output_Index, OutputBuffer->Get());
 
-    
 
 
     /* 
@@ -84,6 +85,12 @@ bool Context::Init()
     blockIndex = glGetProgramResourceIndex(ComputeProgram->Get(), GL_SHADER_STORAGE_BUFFER, "OutputBuffer");
     glShaderStorageBlockBinding(ComputeProgram->Get(), blockIndex, Output_Index);
 
+
+    blockIndex = glGetProgramResourceIndex(MoveProgram->Get(), GL_SHADER_STORAGE_BUFFER, "InputBuffer");
+    glShaderStorageBlockBinding(MoveProgram->Get(), blockIndex, Input_Index);
+
+    blockIndex = glGetProgramResourceIndex(MoveProgram->Get(), GL_SHADER_STORAGE_BUFFER, "OutputBuffer");
+    glShaderStorageBlockBinding(MoveProgram->Get(), blockIndex, Output_Index);
 
     return true;
 }
@@ -204,39 +211,46 @@ void Context::Render()
    
 
 
-    // 렌더링 하기 전에, Compute Program 을 실행시킨다
+    // 렌더링 하기 전에, Compute Program 을 실행 => 계산하고
     ComputeProgram->Use();
-        // 현재 카메라의 위치를 Uniform 으로 설정
-        ComputeProgram->SetUniform("CameraPos", MainCam->Position);
-
         
         // 프로그램을 실행시킨다
         glDispatchCompute(1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
- 
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, OutputBuffer->Get());
- 
-            // 연산 결과, Output 을 CPU 로 읽어오고
-            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
-
-            // Camera 까지의 거리를 기준으로 sort
-            std::sort(ParticleArray.begin(), ParticleArray.end(), ParticleCompare());
-
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
-
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, InputBuffer->Get());
-            
-            // sort 한 결과를 input buffer 에 넣는다
-            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
-
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
     // 일단 실행만 하고
     glUseProgram(0);
 
 
+
+    // 계산 결과를 이용해서 움직이게 한다
+    MoveProgram->Use();
+        /* Uniform Variable 넣기 */
+        MoveProgram->SetUniform("deltaTime", 0.0001f);
+        MoveProgram->SetUniform("LimitRange", Particle::FluidRange);
+        MoveProgram->SetUniform("damping", 0.1f);
+        
+        // 현재 카메라의 위치를 Uniform 으로 설정
+        // Particle 이 최종적으로 움직인 위치에서 카메라까지의 거리를 구해야 한다
+        MoveProgram->SetUniform("CameraPos", MainCam->Position);
+
+
+        glDispatchCompute(1, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, OutputBuffer->Get());
+            // 연산 결과, Output 을 CPU 로 읽어오고
+            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
+            // Camera 까지의 거리를 기준으로 sort
+            std::sort(ParticleArray.begin(), ParticleArray.end(), ParticleCompare());
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, InputBuffer->Get());
+            // sort 한 결과를 input buffer 에 넣는다
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+    glUseProgram(0);
     
     /* 
         Output 버퍼에 들어있는 데이터들에서 한번더 정렬을 해야할 듯?
@@ -270,7 +284,7 @@ void Context::Render()
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // output 버퍼에 저장된 데이터를 이용해서, Particles 를 그린다
-    FluidProgram->Use();
+    DrawProgram->Use();
   
             // 정렬한 데이터를 이용해서, 카메라에서 가까운 것 부터 렌더링을 진행
             for(int i = 0; i < Particle::TotalParticleCount; i++)
@@ -280,11 +294,11 @@ void Context::Render()
                 auto modelTransform = glm::translate(glm::mat4(1.0f), ParticlePos);
                 auto transform = projection * view * modelTransform;
 
-                FluidProgram->SetUniform("transform", transform);
-                FluidProgram->SetUniform("ViewVec", glm::normalize(MainCam->Position - ParticlePos));
+                DrawProgram->SetUniform("transform", transform);
+                DrawProgram->SetUniform("ViewVec", glm::normalize(MainCam->Position - ParticlePos));
 
 
-                BoxMesh->Draw(FluidProgram.get());
+                BoxMesh->Draw(DrawProgram.get());
 
             }
 

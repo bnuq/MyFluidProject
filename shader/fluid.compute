@@ -29,14 +29,16 @@ layout(std430, binding = 2) buffer OutputBuffer
 uniform vec3 CameraPos;
 
 
+
+/* 
+    여기서는 Particle 의 내부 값들을 업데이트
+
+    다른 Particle 의 상태를 읽어야 하기 떄문에, 정렬된 input 이 필요하다
+
+
+
+ */
 void main()
 {
-    // 일단 input 내용을 그대로 output 에 넣는 방식으로 진행
-    // 동일하게 하나의 그룹은 x 축 방향만 가지고 있고, x 축 방향 그룹만 존재한다고 생각
-    uint Index = gl_GlobalInvocationID.x;
-        Particle curParticle = inputData[Index];
-        curParticle.ToCamera = distance(CameraPos, curParticle.Position.xyz);
-
-    outputData[Index] = curParticle;
-    //outputData[Index].padding = inputData[Index].padding + 1.0;
+    
 }

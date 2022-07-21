@@ -44,9 +44,12 @@ private:
     // Mouse
     glm::vec2 m_prevMousePos { glm::vec2(0.0f) };
 
-    // Programs => 유체를 그려내는 프로그램, 유체를 계산하는 프로그램
-    ProgramUPtr FluidProgram;
-    ProgramUPtr ComputeProgram;
+
+    // Programs
+    ProgramUPtr DrawProgram;        // 유체 그리기
+    ProgramUPtr ComputeProgram;     // 유체 계산하기
+    ProgramUPtr MoveProgram;        // 유체 움직이기
+
 
 
     // Meshes => 모든 유체는 박스의 형태로만 표현
@@ -80,6 +83,8 @@ private:
     
     // 유체의 움직임을 계산하는 Compute Shader
     ShaderPtr FluidComputeShader;
+    // 움직이게 하는 Compute Shader
+    ShaderPtr FluidMoveShader;
 
 
     // 유체를 구성하는 Particle Struct

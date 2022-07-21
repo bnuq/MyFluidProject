@@ -25,7 +25,7 @@ public:
     
 
     // Properties, 4 float ·Î ¸ÂÃá´Ù
-    float density       = 0.0f;
+    float density       = 1.0f;
     float pressure      = 0.0f;
     float ToCamera      = 0.0f;
     float padding       = -5.0f;
