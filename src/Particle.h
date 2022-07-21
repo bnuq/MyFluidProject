@@ -40,6 +40,9 @@ public:
     
     // Particle 들의 총 개수
     static int TotalParticleCount;
+
+    // Particle 의 질량
+    static float ParticleMass;
 };
 
 

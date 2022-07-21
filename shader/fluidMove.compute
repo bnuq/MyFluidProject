@@ -14,11 +14,6 @@ struct Particle
     float ToCamera;
     float padding;
 };
-layout(std430, binding = 1) buffer InputBuffer
-{
-    Particle inputData[];
-};
-
 
 layout(std430, binding = 2) buffer OutputBuffer
 {
@@ -36,6 +31,9 @@ uniform vec3 CameraPos;
 
 
 /* 
+    한 파티클의 내용을 업데이트 하는 과정
+    다른 파티클의 데이터를 읽지도 않고, 필요로 하지도 않는다
+
     1. Particle 의 속도에 맞게 이동시키기
         Make_Move(index)
 
@@ -48,18 +46,18 @@ uniform vec3 CameraPos;
 
 void Make_Move(uint idx)
 {
-    Particle curParticle = inputData[idx];
+    Particle curParticle = outputData[idx];
         // 속도 구하고
         curParticle.Velocity.xyz += deltaTime * (curParticle.force.xyz / curParticle.density);
         // 위치 구하고
         curParticle.Position.xyz += deltaTime * curParticle.Velocity.xyz;
     
-    inputData[idx] = curParticle;
+    outputData[idx] = curParticle;
 }
 
 void Check_Range(uint idx)
 {
-    Particle curParticle = inputData[idx];
+    Particle curParticle = outputData[idx];
 
         // 파티클이 경계를 벗어난 경우, 다시 돌아가야 하는 내부를 향하는 노멀벡터
         vec3 norVec = vec3(0, 0, 0);
@@ -84,17 +82,17 @@ void Check_Range(uint idx)
             curParticle.Velocity.xyz = norVec * damping;
             curParticle.Position.xyz += (1.001) * norVec;
 
-            inputData[idx] = curParticle;
+            outputData[idx] = curParticle;
         }
 
 }
 
 void Get_Camera_Distance(uint idx)
 {
-    Particle curParticle = inputData[idx];
+    Particle curParticle = outputData[idx];
         curParticle.ToCamera = distance(CameraPos, curParticle.Position.xyz);
 
-    inputData[idx] = curParticle;
+    outputData[idx] = curParticle;
 }
 
 void main()
@@ -110,7 +108,4 @@ void main()
 
     // 3. 파티클에서 카메라까지 거리를 구하낟
     Get_Camera_Distance(Index);
-        
-    // input data 에 저장해 놓은 값을 output 에 넣는다
-    outputData[Index] = inputData[Index];
 }

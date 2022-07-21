@@ -17,3 +17,6 @@ glm::uvec3 Particle::ParticleCount = glm::uvec3(4, 4, 2);
 
 // 전체 파티클의 개수
 int Particle::TotalParticleCount = (Particle::ParticleCount.x) * (Particle::ParticleCount.y) * (Particle::ParticleCount.z);
+
+
+float Particle::ParticleMass = 1.0f;

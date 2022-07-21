@@ -79,15 +79,11 @@ bool Context::Init()
         binding = 1 or 2 로 고정이 되어 있다
      */
     GLuint blockIndex{};
+
     blockIndex = glGetProgramResourceIndex(ComputeProgram->Get(), GL_SHADER_STORAGE_BUFFER, "InputBuffer");
     glShaderStorageBlockBinding(ComputeProgram->Get(), blockIndex, Input_Index);
-
     blockIndex = glGetProgramResourceIndex(ComputeProgram->Get(), GL_SHADER_STORAGE_BUFFER, "OutputBuffer");
     glShaderStorageBlockBinding(ComputeProgram->Get(), blockIndex, Output_Index);
-
-
-    blockIndex = glGetProgramResourceIndex(MoveProgram->Get(), GL_SHADER_STORAGE_BUFFER, "InputBuffer");
-    glShaderStorageBlockBinding(MoveProgram->Get(), blockIndex, Input_Index);
 
     blockIndex = glGetProgramResourceIndex(MoveProgram->Get(), GL_SHADER_STORAGE_BUFFER, "OutputBuffer");
     glShaderStorageBlockBinding(MoveProgram->Get(), blockIndex, Output_Index);
@@ -213,7 +209,20 @@ void Context::Render()
 
     // 렌더링 하기 전에, Compute Program 을 실행 => 계산하고
     ComputeProgram->Use();
-        
+        /* Uniform Variables Setting */
+        // Particles 에 대한 정보
+        ComputeProgram->SetUniform("particlelMass", Particle::ParticleMass);
+        ComputeProgram->SetUniform("particlelCount", Particle::TotalParticleCount);
+
+        // Smooth Kernel 에 대한 정보
+        ComputeProgram->SetUniform("h", 1.0f);
+        ComputeProgram->SetUniform("hSquare", 1.0f);
+
+        // 밀도=>압력 계산에 필요한 정보
+        ComputeProgram->SetUniform("gasCoeffi", 1.0f);
+        ComputeProgram->SetUniform("restDensity", 1.0f);
+
+
         // 프로그램을 실행시킨다
         glDispatchCompute(1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);

@@ -3,6 +3,74 @@
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 
+// 넘겨받는 Uniform Variables
+// Particles 에 대한 정보
+    uniform float particleMass;
+    uniform uint particleCount;
+
+
+// Smooth Kernel 관련 정보
+    uniform float h;
+    uniform float hSquare;
+
+    //smooth kernel 함수들 => 일단 함수로 쓰고, 나중에 MACRO 로 바꿔보자
+    #define PI 3.14
+    /* 
+        W_poly6 -> 변수인 r 의 제곱을 사용한다
+        사용처
+            : 밀도 계산
+            : color field 값
+    */
+    float W_Poly6(float r2)
+    {
+        return (315.0f / (64 * PI * pow(abs(h), 9.0f) ) ) * pow(abs(hSquare - r2), 3);
+    }
+    /* 
+        Grad_W_Poly6 -> r 제곱을 변수로 사용
+                    -> gradient 결과 상대 particle 을 가리키는 벡터를 가진다
+                    -> 이 함수는 크기만 계산
+        사용처
+            : surface normal filed pointing into the fluid 계산
+    */
+    float Grad_W_Poly6(float r2)
+    {
+        return (315.0f * (-6.0f) / (64.0f * PI * pow(abs(h), 9))) * pow(abs(hSquare - r2), 2);
+    }
+    /* 
+        Laplace_W_Poly6 -> r 제곱을 사용
+        사용처
+            : curvature of the surface 계산
+    */
+    float Laplace_W_Poly6(float r2)
+    {
+        return (315.0f / (64 * PI * pow(abs(h), 9))) * ((-18) * pow(abs(hSquare - r2), 2) + 24 * r2 * (hSquare - r2));
+    }
+    /* 
+        Grad_W_Spiky -> r 을 사용
+                    -> particle 에서 다른 particle 을 향하는 방향을 가진다 => normalized vector
+                    -> 이 함수는 단위벡터를 제외한 크기만 계산
+        사용처
+            : 압력에 의한 힘 계산
+    */
+    float Grad_W_Spiky(float r)
+    {
+        return (-45.0f / ( PI * pow(abs(h), 6) )) * (pow(abs(h - r), 2));
+    }
+    /* 
+        Laplace_W_Viscosity -> r 사용
+        사용처
+            : 점성에 의한 힘 계산
+    */
+    float Laplace_W_Viscosity(float r)
+    {
+        return (45.0f / (PI * pow(abs(h), 6))) * (h - r);
+    }
+
+//압력 계산에 필요한 정보
+    uniform float gasCoeffi;
+    uniform float restDensity;
+
+
 struct Particle
 {
     vec4 Position;
@@ -26,18 +94,79 @@ layout(std430, binding = 2) buffer OutputBuffer
 };
 
 
-uniform vec3 CameraPos;
-
-
 
 /* 
     여기서는 Particle 의 내부 값들을 업데이트
+        다른 Particle 의 상태를 읽어야 하기 떄문에, 정렬된 input 이 필요하다
 
-    다른 Particle 의 상태를 읽어야 하기 떄문에, 정렬된 input 이 필요하다
+    하는 작업
+    1. 밀도, 압력 값 계산
+        Update_Property(idx)
 
+    2. 힘 계산
+        Calculate_Force(idx)
+        압력
+        점성
+        wave
+        중력
+        클릭
 
-
+    3. color field 계산
+        Get_Color_Field(idx)
  */
+
+
+// output data => density, pressure 업데이트
+void Update_Properties(uint idx)
+{
+    // 밀도 먼저 계산 => 밀도는 매번 새롭게 구한다
+    float newDensity = 0;
+    // SPH 기법 ==> 주변 particle 의 값을 이용해서 자신의 값을 구한다
+    // 현재 input 은 정렬되어 있는 상태니까, 좌로 or 우로 검색하면서 영향력이 있는 거리내에 있는 particles 만 찾는다
+        
+    // 좌 검색
+    for(uint id = idx - 1; id > 0; id--)
+    {
+        // 두 파티클 사이의 거리를 구한다
+        vec3 relativePos = inputData[id].Position.xyz - inputData[idx].Position.xyz;
+        float rSquare = dot(relativePos, relativePos);
+
+        // 영향력 있는 거리 안이다
+        if(rSquare < hSquare)
+            newDensity += particleMass * W_Poly6(rSquare);
+        // 벗어나면, 그 뒤로는 검색할 필요 없다
+        else
+            break;
+    }
+    // 우 검색
+    for(uint id = idx + 1; id < particleCount; id++)
+    {
+        // 두 파티클 사이의 거리를 구한다
+        vec3 relativePos = inputData[id].Position.xyz - inputData[idx].Position.xyz;
+        float rSquare = dot(relativePos, relativePos);
+
+        // 영향력 있는 거리 안이다
+        if(rSquare < hSquare)
+            newDensity += particleMass * W_Poly6(rSquare);
+        // 벗어나면, 그 뒤로는 검색할 필요 없다
+        else
+            break;
+    }
+    //혹시 모르니까, 밀도 값은 음수 값을 가질 수 없다
+    newDensity = max(newDensity, 0.001f);
+
+
+
+    // 새로 구한 밀도 값을 output data 에 넣는다
+    outputData[idx].density = newDensity;
+
+    // 새로 구한 밀도를 바탕으로, particle 이 가지는 압력을 구한다
+    // 논문에 의해서, 수정된 이상기체 방정식을 사용하도록 한다
+    outputData[idx].pressure = gasCoeffi * max(newDensity - restDensity, 0.0f);
+}
+
+
+
 void main()
 {
     
