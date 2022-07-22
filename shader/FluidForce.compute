@@ -25,7 +25,9 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
     uniform vec4 gravityAcel;
 
 
-
+uniform float pressureRatio;
+uniform float viscosityRatio;
+uniform float surfaceRatio;
 
 
     
@@ -63,10 +65,6 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
             : 점성에 의한 힘 계산
     */
     float Laplace_W_Viscosity(float r) { return (45.0 / (PI * pow(abs(h), 6))) * (h - r); }
-
-//압력 계산에 필요한 정보
-    uniform float gasCoeffi;
-    uniform float restDensity;
 
 
 
@@ -128,7 +126,7 @@ void Update_SurfNormal(uint idx)
         for(uint otherId = idx - 1; otherId >= 0; otherId--)
         {
             // 두 파티클 사이의 거리를 구한다
-            vec3 relativePos = outputData[otherId].Position.xyz - outputData[idx].Position.xyz;
+            vec3 relativePos = outputData[idx].Position.xyz - outputData[otherId].Position.xyz;
             float rSquare = dot(relativePos, relativePos);
 
             // 영향력 있는 거리 안이다
@@ -153,6 +151,7 @@ void Update_SurfNormal(uint idx)
                 break;
         }
 
+    // threshold 보다 커야 표면인 거 아님?
     if(length(outputData[idx].surfNormal) > surfForceThreshold)
     {
         atomicAdd(count, 1);
@@ -204,7 +203,7 @@ vec4 Get_Fluid_Force(uint idx)
                 표면 장력 => 방향은 이미 구한 surf normal 방향
                 그 크기를 구해야 한다
             */
-            //SurfaceForceMag += particleMass / outputData[otherId].density * Laplace_W_Poly6(rSquare);
+            SurfaceForceMag += particleMass / outputData[otherId].density * Laplace_W_Poly6(rSquare);
         }
         // 벗어나면, 그 뒤로는 검색할 필요 없다
         else
@@ -242,7 +241,7 @@ vec4 Get_Fluid_Force(uint idx)
                 표면 장력 => 방향은 이미 구한 surf normal 방향
                 그 크기를 구해야 한다
             */
-            //SurfaceForceMag += particleMass / outputData[otherId].density * Laplace_W_Poly6(rSquare);
+            SurfaceForceMag += particleMass / outputData[otherId].density * Laplace_W_Poly6(rSquare);
         }
         // 벗어나면, 그 뒤로는 검색할 필요 없다
         else
@@ -256,8 +255,9 @@ vec4 Get_Fluid_Force(uint idx)
                         : (-1) * surfCoeffi * SurfaceForceMag * normalize(outputData[idx].surfNormal);
 
 
-    //PressureForce = vec4(0, 0, 0, 0);
-    //SurfaceForce = vec4(0, 0, 0, 0);
+    PressureForce *= pressureRatio;
+    ViscosityForce *= viscosityRatio;
+    SurfaceForce *= surfaceRatio;
 
     // 모든 힘을 리턴한다
     return PressureForce + ViscosityForce + SurfaceForce;

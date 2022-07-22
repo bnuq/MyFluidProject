@@ -132,15 +132,15 @@ private:
         float h = 1.0f;
         
         // 밀도=>압력 계산
-        float gasCoeffi   = 1.0f;
+        float gasCoeffi   = 10.0f;
         float restDensity = 1.0f;
     };
 
     struct ForVar
     {
-        float viscosity     = 100.0f;
+        float viscosity     = 0.1f;
         float surfCoeffi    = 1.0f;
-        float surfForceThreshold = 1.0f;
+        float surfForceThreshold = 10.0f;
 
         glm::vec4 gravityAcel = glm::vec4(0.0f, -20.0f, 0.0f, 0.0f);
     };
@@ -168,6 +168,12 @@ private:
         float restDensity = 1.0f;
     };
     Gas gas;
+
+
+
+    float pressureRatio = 1.0f;
+    float viscosityRatio = 1.0f;
+    float surfaceRatio = 1.0f;
 };
 
 #endif // __CONTEXT_H__

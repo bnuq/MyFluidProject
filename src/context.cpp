@@ -220,6 +220,11 @@ void Context::Render()
 
         ImGui::DragFloat("deltaTime", &movvar.deltaTime);
         ImGui::DragFloat("damping", &movvar.damping);
+
+
+        ImGui::DragFloat("pressureRatio", &pressureRatio, 0.001, 0.0, 1.0f);
+        ImGui::DragFloat("viscosityRatio", &viscosityRatio, 0.001, 0.0, 1.0f);
+        ImGui::DragFloat("surfaceRatio", &surfaceRatio, 0.001, 0.0, 1.0f);
     }
     ImGui::End();
 
@@ -279,6 +284,10 @@ void Context::Render()
 
         // 2
         ForceCompute->SetUniform("gravityAcel", forvar.gravityAcel);
+
+        ForceCompute->SetUniform("pressureRatio", pressureRatio);
+        ForceCompute->SetUniform("viscosityRatio", viscosityRatio);
+        ForceCompute->SetUniform("surfaceRatio", surfaceRatio);
 
         glDispatchCompute(1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
