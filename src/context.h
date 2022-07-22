@@ -125,7 +125,7 @@ private:
 
 
     // 각 프로그램에서 필요로 하는 Uniform Variables
-    struct ComVar
+    struct DenPreVar
     {
         // Smooth Kernel 계산 반지름
         float h = 1.0f;
@@ -134,14 +134,20 @@ private:
         float gasCoeffi   = 1.0f;
         float restDensity = 1.0f;
     };
+
+    struct ForVar
+    {
+        glm::vec4 gravityAcel = glm::vec4(0.0f, -5.0f, 0.0f, 0.0f);
+    };
     
     struct MovVar
     {
-        float deltaTime = 0.0001f;
+        float deltaTime = 0.00001f;
         float damping   = 0.1f;
     };
 
-    ComVar comvar;
+    DenPreVar comvar;
+    ForVar forvar;
     MovVar movvar;
 
 

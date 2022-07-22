@@ -235,11 +235,19 @@ void Context::Render()
     glUseProgram(0);
 
 
-    // // 이후 각 입자의 알짜힘을 구함
-    // ForceCompute->Use();
-    //     glDispatchCompute(1, 1, 1);
-    //     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-    // glUseProgram(0);
+    // 이후 각 입자의 알짜힘을 구함
+    ForceCompute->Use();
+        // Set Uniforms
+        // 0
+        
+        // 1
+
+        // 2
+        ForceCompute->SetUniform("gravityAcel", forvar.gravityAcel);
+
+        glDispatchCompute(1, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    glUseProgram(0);
 
 
     // 계산 결과를 이용해서 움직이게 한다

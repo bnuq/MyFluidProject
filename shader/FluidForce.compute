@@ -4,6 +4,19 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 
 // 넘겨받는 Uniform Variables
+// 0
+
+
+// 1
+
+
+// 2 => Extra Force
+    uniform vec4 gravityAcel;
+
+
+
+
+
 // Particles 에 대한 정보
     uniform float particleMass;
     uniform uint particleCount;
@@ -70,6 +83,18 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
     uniform float gasCoeffi;
     uniform float restDensity;
 
+
+
+
+
+/* 
+    Output Data 에서,
+    Position, Velocity, density, pressure 는 계산이 완료된 상태
+
+    force, surfNormal 을 구해서 넣어주어야 한다
+
+    input data 가 그대로 output 으로 들어왔기 때문에, particles 는 여전히 정렬된 상태다
+ */
 struct Particle
 {
     vec4 Position;
@@ -89,23 +114,18 @@ layout(std430, binding = 2) buffer OutputBuffer
 
 
 /* 
-    여기서는 Particle 의 내부 값들을 업데이트
-        다른 Particle 의 상태를 읽어야 하기 떄문에, 정렬된 input 이 필요하다
+    force(알짜힘) + surfNormal 구하기
+        0. 가장 먼저 surfNormal 을 구한다
 
-    하는 작업
-    1. 밀도, 압력 값 계산
-        Update_Property(idx)
+        1. 주변 particles 의 값을 통해 구하는 값
+            압력에 의한 힘
+            점성에 의한 힘
+            표면장력
 
-    2. 힘 계산
-        Calculate_Force(idx)
-        압력
-        점성
-        wave
-        중력
-        클릭
-
-    3. color field 계산
-        Get_Color_Field(idx)
+        2. 주변과 관계없이 구할 수 있는 값
+            wave
+            중력
+            클릭
  */
 
 
@@ -159,13 +179,28 @@ layout(std430, binding = 2) buffer OutputBuffer
 // }
 
 
-void Calculate_Force(uint idx)
+
+// 주변 particle 에 관계없이 계산되는 힘
+vec4 Get_Extra_Force(uint idx)
 {
-    
+    vec4 ExtraForce = vec4(0, 0, 0, 0);
+    float curDensity = outputData[idx].density;
+
+    // 중력에 의한 힘
+    // 나비에 스톡스 방정식에 의해 ~ 밀도 사용 // 나도 2000 정도 곱해줘야 하나??
+    ExtraForce += gravityAcel * curDensity;
+
+
+
+    return ExtraForce;
 }
 
 
 void main()
 {
-    
+    // ssbo 에 접근하는 스레드의 인덱스
+    uint Index = gl_GlobalInvocationID.x;
+
+
+    outputData[Index].force += Get_Extra_Force(Index);
 }
