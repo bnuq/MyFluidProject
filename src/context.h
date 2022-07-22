@@ -119,6 +119,7 @@ private:
     BufferPtr InputBuffer;
     BufferPtr OutputBuffer;
 
+    BufferPtr testBuffer;
 
     unsigned int Input_Index  = 1;
     unsigned int Output_Index = 2;
@@ -137,12 +138,16 @@ private:
 
     struct ForVar
     {
-        glm::vec4 gravityAcel = glm::vec4(0.0f, -5.0f, 0.0f, 0.0f);
+        float viscosity     = 100.0f;
+        float surfCoeffi    = 1.0f;
+        float surfForceThreshold = 1.0f;
+
+        glm::vec4 gravityAcel = glm::vec4(0.0f, -20.0f, 0.0f, 0.0f);
     };
     
     struct MovVar
     {
-        float deltaTime = 0.00001f;
+        float deltaTime = 0.001f;
         float damping   = 0.1f;
     };
 
@@ -154,7 +159,7 @@ private:
 
 
     // Smooth Kernel
-    float SmoothKernelRadius = 1.0f;
+    float SmoothKernelRadius = 3.0f;
 
     // Gas
     struct Gas

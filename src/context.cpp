@@ -62,7 +62,9 @@ bool Context::Init()
     OutputBuffer
         = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, NULL, sizeof(Particle), ParticleArray.size());
 
-    
+    unsigned int temp = 0;
+    testBuffer = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, &temp, sizeof(unsigned int), 1);
+
     /* 
         SSBO 버퍼를 각 인덱스에 바인딩
 
@@ -71,6 +73,8 @@ bool Context::Init()
      */
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Input_Index, InputBuffer->Get());
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Output_Index, OutputBuffer->Get());
+
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, testBuffer->Get());
 
     /* 
         컴퓨트 프로그램과 SSBO 를 연결
@@ -92,6 +96,8 @@ bool Context::Init()
     // for force compute program
     blockIndex = glGetProgramResourceIndex(ForceCompute->Get(), GL_SHADER_STORAGE_BUFFER, "OutputBuffer");
     glShaderStorageBlockBinding(ForceCompute->Get(), blockIndex, Output_Index);
+    blockIndex = glGetProgramResourceIndex(ForceCompute->Get(), GL_SHADER_STORAGE_BUFFER, "TestBuffer");
+    glShaderStorageBlockBinding(ForceCompute->Get(), blockIndex, 5);
 
     // for move compute program
     blockIndex = glGetProgramResourceIndex(MoveCompute->Get(), GL_SHADER_STORAGE_BUFFER, "OutputBuffer");
@@ -197,6 +203,27 @@ void Context::Render()
     glEnable(GL_DEPTH_TEST);
 
 
+    if(ImGui::Begin("Smooth Kernel"))
+    {
+        ImGui::DragFloat("Smooth Kernel Radius", &SmoothKernelRadius);
+
+        ImGui::DragFloat("Particle Mass", &Particle::ParticleMass);
+
+        ImGui::DragFloat("Gas Coeffi", &gas.gasCoeffi);
+        ImGui::DragFloat("Gas RestDensity", &gas.restDensity);
+
+        ImGui::DragFloat("viscosity", &forvar.viscosity);
+        ImGui::DragFloat("surfCoeffi", &forvar.surfCoeffi);
+        ImGui::DragFloat("surfForceThreshold", &forvar.surfForceThreshold);
+
+        ImGui::DragFloat4("gravityAcel", glm::value_ptr(forvar.gravityAcel));
+
+        ImGui::DragFloat("deltaTime", &movvar.deltaTime);
+        ImGui::DragFloat("damping", &movvar.damping);
+    }
+    ImGui::End();
+
+
 
     // 카메라 설정, 위치 등을 확정
     auto projection = glm::perspective
@@ -239,14 +266,32 @@ void Context::Render()
     ForceCompute->Use();
         // Set Uniforms
         // 0
+        DensityPressureCompute->SetUniform("h", SmoothKernelRadius);
+        DensityPressureCompute->SetUniform("hSquare", SmoothKernelRadius * SmoothKernelRadius);
+
+        DensityPressureCompute->SetUniform("particleMass", Particle::ParticleMass);
+        DensityPressureCompute->SetUniform("particleCount", Particle::TotalParticleCount);
         
         // 1
+        ForceCompute->SetUniform("viscosity", forvar.viscosity);
+        ForceCompute->SetUniform("surfCoeffi", forvar.surfCoeffi);
+        ForceCompute->SetUniform("surfForceThreshold", forvar.surfForceThreshold);
 
         // 2
         ForceCompute->SetUniform("gravityAcel", forvar.gravityAcel);
 
         glDispatchCompute(1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, testBuffer->Get());
+            unsigned int temp;
+            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &temp);
+            SPDLOG_INFO("{}", temp);
+
+            temp = 0;
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &temp);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     glUseProgram(0);
 
 
@@ -276,6 +321,8 @@ void Context::Render()
             // sort 한 결과를 input buffer 에 넣는다
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+        
 
     glUseProgram(0);
     
@@ -309,6 +356,10 @@ void Context::Render()
     // 렌더링을 위한 설정
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    //SPDLOG_INFO("First surfNormal is {}, {}, {}", ParticleArray[0].surfNormal.x, ParticleArray[0].surfNormal.y, ParticleArray[0].surfNormal.z);
+    //SPDLOG_INFO("First Force is {}, {}, {}", ParticleArray[0].force.x, ParticleArray[0].force.y, ParticleArray[0].force.z);
+    
 
     // output 버퍼에 저장된 데이터를 이용해서, Particles 를 그린다
     DrawProgram->Use();

@@ -19,4 +19,4 @@ glm::uvec3 Particle::ParticleCount = glm::uvec3(4, 4, 2);
 int Particle::TotalParticleCount = (Particle::ParticleCount.x) * (Particle::ParticleCount.y) * (Particle::ParticleCount.z);
 
 
-float Particle::ParticleMass = 1.0f;
+float Particle::ParticleMass = 0.001f;
