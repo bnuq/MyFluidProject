@@ -20,23 +20,27 @@ bool Context::Init()
 
 
     // Initialize Programs
+    // 밀도와 압력을 계산하는 compute shader
+    FluidDensityPressure = Shader::CreateFromFile("./shader/FluidDensityPressure.compute", GL_COMPUTE_SHADER);
+    DensityPressureCompute = Program::Create({ FluidDensityPressure });
+    if(!DensityPressureCompute) return false;
+
+    // Particle 들의 움직임을 계산하는 compute shader
+    FluidForce = Shader::CreateFromFile("./shader/FluidForce.compute", GL_COMPUTE_SHADER);
+    ForceCompute = Program::Create({ FluidForce });
+    if(!ForceCompute) return false;
+
+    // Particle 를 움직이는 셰이더
+    FluidMove = Shader::CreateFromFile("./shader/FluidMove.compute", GL_COMPUTE_SHADER);
+    MoveCompute = Program::Create({ FluidMove });
+    if(!MoveCompute) return false;
+
+
     // Fluid 를 그리는 프로그램
     DrawProgram = Program::Create("./shader/fluid.vs", "./shader/fluid.fs");
     if(!DrawProgram) return false;
 
-    // Particle 들의 움직임을 계산하는 컴퓨트 셰이더
-    FluidComputeShader = Shader::CreateFromFile("./shader/fluid.compute", GL_COMPUTE_SHADER);
-    // 해당 셰이더를 담는 프로그램 생성
-    ComputeProgram = Program::Create({ FluidComputeShader });
-    if(!ComputeProgram) return false;
-
-    // Particle 를 움직이는 셰이더
-    FluidMoveShader = Shader::CreateFromFile("./shader/fluidMove.compute", GL_COMPUTE_SHADER);
-    // 해당 셰이더를 담는 프로그램 생성
-    MoveProgram = Program::Create({ FluidMoveShader });
-    if(!MoveProgram) return false;
-
-
+    /************************************************/
 
     // 카메라 객체 초기화
     MainCam = Camera::Create();
@@ -54,8 +58,9 @@ bool Context::Init()
     // 버퍼 2개 모두 처음에 동일하게 초기화한다
     InputBuffer 
         = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, ParticleArray.data(), sizeof(Particle), ParticleArray.size());
+
     OutputBuffer
-        = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, ParticleArray.data(), sizeof(Particle), ParticleArray.size());
+        = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, NULL, sizeof(Particle), ParticleArray.size());
 
     
     /* 
@@ -67,26 +72,32 @@ bool Context::Init()
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Input_Index, InputBuffer->Get());
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Output_Index, OutputBuffer->Get());
 
-
-
     /* 
         컴퓨트 프로그램과 SSBO 를 연결
         
-        Input Buffer  => 1
-        Output Buffer => 2
-
-        이렇게 연결되어 있는 것은 Compute Shader 에서 지정한 것이기 때문에, 고정이다
-        binding = 1 or 2 로 고정이 되어 있다
+        input buffer  => density pressure compute => output buffer
+        output buffer => force compute            => output buffer
+        output buffer => move compute             => output buffer
+        
+        output buffer 내용 읽어와 => sort => 렌더링 && input buffer 로 넣기
      */
     GLuint blockIndex{};
 
-    blockIndex = glGetProgramResourceIndex(ComputeProgram->Get(), GL_SHADER_STORAGE_BUFFER, "InputBuffer");
-    glShaderStorageBlockBinding(ComputeProgram->Get(), blockIndex, Input_Index);
-    blockIndex = glGetProgramResourceIndex(ComputeProgram->Get(), GL_SHADER_STORAGE_BUFFER, "OutputBuffer");
-    glShaderStorageBlockBinding(ComputeProgram->Get(), blockIndex, Output_Index);
+    // for density pressure compute program
+    blockIndex = glGetProgramResourceIndex(DensityPressureCompute->Get(), GL_SHADER_STORAGE_BUFFER, "InputBuffer");
+    glShaderStorageBlockBinding(DensityPressureCompute->Get(), blockIndex, Input_Index);
+    blockIndex = glGetProgramResourceIndex(DensityPressureCompute->Get(), GL_SHADER_STORAGE_BUFFER, "OutputBuffer");
+    glShaderStorageBlockBinding(DensityPressureCompute->Get(), blockIndex, Output_Index);
 
-    blockIndex = glGetProgramResourceIndex(MoveProgram->Get(), GL_SHADER_STORAGE_BUFFER, "OutputBuffer");
-    glShaderStorageBlockBinding(MoveProgram->Get(), blockIndex, Output_Index);
+    // for force compute program
+    blockIndex = glGetProgramResourceIndex(ForceCompute->Get(), GL_SHADER_STORAGE_BUFFER, "OutputBuffer");
+    glShaderStorageBlockBinding(ForceCompute->Get(), blockIndex, Output_Index);
+
+    // for move compute program
+    blockIndex = glGetProgramResourceIndex(MoveCompute->Get(), GL_SHADER_STORAGE_BUFFER, "OutputBuffer");
+    glShaderStorageBlockBinding(MoveCompute->Get(), blockIndex, Output_Index);
+
+
 
     return true;
 }
@@ -204,44 +215,43 @@ void Context::Render()
         MainCam->UpVec
     );
 
-   
 
+    // 가장 먼저 정렬된 배열 => 밀도와 압력을 구한다
+    DensityPressureCompute->Use();
 
-    // 렌더링 하기 전에, Compute Program 을 실행 => 계산하고
-    ComputeProgram->Use();
-        /* Uniform Variables Setting */
-        // Particles 에 대한 정보
-        ComputeProgram->SetUniform("particlelMass", Particle::ParticleMass);
-        ComputeProgram->SetUniform("particlelCount", Particle::TotalParticleCount);
+        // Set Uniforms
+        DensityPressureCompute->SetUniform("h", SmoothKernelRadius);
+        DensityPressureCompute->SetUniform("hSquare", SmoothKernelRadius * SmoothKernelRadius);
 
-        // Smooth Kernel 에 대한 정보
-        ComputeProgram->SetUniform("h", 1.0f);
-        ComputeProgram->SetUniform("hSquare", 1.0f);
+        DensityPressureCompute->SetUniform("particleMass", Particle::ParticleMass);
+        DensityPressureCompute->SetUniform("particleCount", Particle::TotalParticleCount);
 
-        // 밀도=>압력 계산에 필요한 정보
-        ComputeProgram->SetUniform("gasCoeffi", 1.0f);
-        ComputeProgram->SetUniform("restDensity", 1.0f);
+        DensityPressureCompute->SetUniform("gasCoeffi", gas.gasCoeffi);
+        DensityPressureCompute->SetUniform("gasCoeffi", gas.restDensity);
 
-
-        // 프로그램을 실행시킨다
         glDispatchCompute(1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-    // 일단 실행만 하고
+        
     glUseProgram(0);
 
 
+    // // 이후 각 입자의 알짜힘을 구함
+    // ForceCompute->Use();
+    //     glDispatchCompute(1, 1, 1);
+    //     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    // glUseProgram(0);
+
 
     // 계산 결과를 이용해서 움직이게 한다
-    MoveProgram->Use();
+    MoveCompute->Use();
         /* Uniform Variable 넣기 */
-        MoveProgram->SetUniform("deltaTime", 0.0001f);
-        MoveProgram->SetUniform("LimitRange", Particle::FluidRange);
-        MoveProgram->SetUniform("damping", 0.1f);
+        MoveCompute->SetUniform("deltaTime", movvar.deltaTime);
+        MoveCompute->SetUniform("LimitRange", Particle::FluidRange);
+        MoveCompute->SetUniform("damping", movvar.damping);
         
         // 현재 카메라의 위치를 Uniform 으로 설정
         // Particle 이 최종적으로 움직인 위치에서 카메라까지의 거리를 구해야 한다
-        MoveProgram->SetUniform("CameraPos", MainCam->Position);
+        MoveCompute->SetUniform("CameraPos", MainCam->Position);
 
 
         glDispatchCompute(1, 1, 1);

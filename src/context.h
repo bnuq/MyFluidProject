@@ -46,10 +46,10 @@ private:
 
 
     // Programs
-    ProgramUPtr DrawProgram;        // 유체 그리기
-    ProgramUPtr ComputeProgram;     // 유체 계산하기
-    ProgramUPtr MoveProgram;        // 유체 움직이기
-
+    ProgramUPtr DensityPressureCompute;     // 밀도와 압력만 먼저 계산
+    ProgramUPtr ForceCompute;               // 입자의 알짜힘 계산
+    ProgramUPtr MoveCompute;                // 유체 움직이기
+    ProgramUPtr DrawProgram;                // 유체 그리기
 
 
     // Meshes => 모든 유체는 박스의 형태로만 표현
@@ -80,17 +80,18 @@ private:
     Light m_light;
 
 
-    
-    // 유체의 움직임을 계산하는 Compute Shader
-    ShaderPtr FluidComputeShader;
-    // 움직이게 하는 Compute Shader
-    ShaderPtr FluidMoveShader;
+    // Compute Shaders
+    ShaderPtr FluidDensityPressure;     // 밀도, 압력 계산 compute shader
+    ShaderPtr FluidForce;               // 알짜힘을 계산하는 compute shader
+    ShaderPtr FluidMove;                // 유체의 움직임을 계산하는 Compute Shader
+
+
+
 
 
     // 유체를 구성하는 Particle Struct
     // Particle 데이터를 저장하는 배열 => CPU
     std::vector<Particle> ParticleArray{};
-
 
     // Particle 들의 초기 위치 값을 넣는 함수
     void InitParticles();
@@ -118,9 +119,44 @@ private:
     BufferPtr InputBuffer;
     BufferPtr OutputBuffer;
 
+
     unsigned int Input_Index  = 1;
     unsigned int Output_Index = 2;
 
+
+    // 각 프로그램에서 필요로 하는 Uniform Variables
+    struct ComVar
+    {
+        // Smooth Kernel 계산 반지름
+        float h = 1.0f;
+        
+        // 밀도=>압력 계산
+        float gasCoeffi   = 1.0f;
+        float restDensity = 1.0f;
+    };
+    
+    struct MovVar
+    {
+        float deltaTime = 0.0001f;
+        float damping   = 0.1f;
+    };
+
+    ComVar comvar;
+    MovVar movvar;
+
+
+
+
+    // Smooth Kernel
+    float SmoothKernelRadius = 1.0f;
+
+    // Gas
+    struct Gas
+    {
+        float gasCoeffi   = 1.0f;
+        float restDensity = 1.0f;
+    };
+    Gas gas;
 };
 
 #endif // __CONTEXT_H__
