@@ -19,35 +19,34 @@ bool Context::Init()
     glClearColor(0.1f, 0.2f, 0.3f, 0.0f);
 
 
-    // Initialize Programs
-    // 밀도와 압력을 계산하는 compute shader
+    /* Initialize Programs */
+    // 1. Density, Pressure 계산
     FluidDensityPressure = Shader::CreateFromFile("./shader/FluidDensityPressure.compute", GL_COMPUTE_SHADER);
     DensityPressureCompute = Program::Create({ FluidDensityPressure });
     if(!DensityPressureCompute) return false;
 
-    // Particle 들의 움직임을 계산하는 compute shader
+    // 2. Surface Normal, Force 계산
     FluidForce = Shader::CreateFromFile("./shader/FluidForce.compute", GL_COMPUTE_SHADER);
     ForceCompute = Program::Create({ FluidForce });
     if(!ForceCompute) return false;
 
-    // Particle 를 움직이는 셰이더
+    // 3. Velocity, Position 계산
     FluidMove = Shader::CreateFromFile("./shader/FluidMove.compute", GL_COMPUTE_SHADER);
     MoveCompute = Program::Create({ FluidMove });
     if(!MoveCompute) return false;
 
-
-    // Fluid 를 그리는 프로그램
+    // 4. Fluid Rendering
     DrawProgram = Program::Create("./shader/fluid.vs", "./shader/fluid.fs");
     if(!DrawProgram) return false;
 
-    /************************************************/
+
+
 
     // 카메라 객체 초기화
     MainCam = Camera::Create();
     
     // Particle => Box 로 표현하자
     BoxMesh = Mesh::CreateBox();
-
 
 
     // Particle 들의 초기 정보를 초기화 한다
@@ -61,6 +60,7 @@ bool Context::Init()
 
     OutputBuffer
         = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, NULL, sizeof(Particle), ParticleArray.size());
+
 
     unsigned int temp = 0;
     testBuffer = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, &temp, sizeof(unsigned int), 1);
@@ -87,11 +87,13 @@ bool Context::Init()
      */
     GLuint blockIndex{};
 
-    // for density pressure compute program
-    blockIndex = glGetProgramResourceIndex(DensityPressureCompute->Get(), GL_SHADER_STORAGE_BUFFER, "InputBuffer");
-    glShaderStorageBlockBinding(DensityPressureCompute->Get(), blockIndex, Input_Index);
-    blockIndex = glGetProgramResourceIndex(DensityPressureCompute->Get(), GL_SHADER_STORAGE_BUFFER, "OutputBuffer");
-    glShaderStorageBlockBinding(DensityPressureCompute->Get(), blockIndex, Output_Index);
+
+    // 1. Density, Pressure
+        blockIndex = glGetProgramResourceIndex(DensityPressureCompute->Get(), GL_SHADER_STORAGE_BUFFER, "InputBuffer");
+        glShaderStorageBlockBinding(DensityPressureCompute->Get(), blockIndex, Input_Index);
+        blockIndex = glGetProgramResourceIndex(DensityPressureCompute->Get(), GL_SHADER_STORAGE_BUFFER, "OutputBuffer");
+        glShaderStorageBlockBinding(DensityPressureCompute->Get(), blockIndex, Output_Index);
+
 
     // for force compute program
     blockIndex = glGetProgramResourceIndex(ForceCompute->Get(), GL_SHADER_STORAGE_BUFFER, "OutputBuffer");
@@ -106,45 +108,64 @@ bool Context::Init()
 
 
 
-    // test
-    // 설정한 위치, toCamera 값을 이용해서 밀도와 압력을 초기화 한다
-    DensityPressureCompute->Use();
 
-        // Set Uniforms
-        DensityPressureCompute->SetUniform("h", SmoothKernelRadius);
-        DensityPressureCompute->SetUniform("hSquare", SmoothKernelRadius * SmoothKernelRadius);
+    // density pressure compute test
+    {
+        DensityPressureCompute->Use();
 
-        DensityPressureCompute->SetUniform("particleMass", Particle::ParticleMass);
-        DensityPressureCompute->SetUniform("TotalParticleCount", Particle::TotalParticleCount);
+            // Set Uniforms
+            DensityPressureCompute->SetUniform("h", SmoothKernelRadius);
+            DensityPressureCompute->SetUniform("hSquare", SmoothKernelRadius * SmoothKernelRadius);
 
-        DensityPressureCompute->SetUniform("gasCoeffi", gas.gasCoeffi);
-        DensityPressureCompute->SetUniform("gasCoeffi", gas.restDensity);
+            DensityPressureCompute->SetUniform("particleMass", Particle::ParticleMass);
+            DensityPressureCompute->SetUniform("TotalParticleCount", Particle::TotalParticleCount);
 
-        glDispatchCompute(1, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            DensityPressureCompute->SetUniform("gasCoeffi", gas.gasCoeffi);
+            DensityPressureCompute->SetUniform("gasCoeffi", gas.restDensity);
 
-        // output buffer 내용을 읽고, 다시 input buffer 로 넣어준다
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, OutputBuffer->Get());
-            // 연산 결과, Output 을 CPU 로 읽어오고
-            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
+            glDispatchCompute(1, 1, 1);
+            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-            // 일단 로그로 확인하자
-            for(unsigned int i = 0; i < Particle::TotalParticleCount; i++)
-            {
-                SPDLOG_INFO("{} th Particle Density {}", i, ParticleArray[i].density);
-                SPDLOG_INFO("{} th Particle Pressure {}", i, ParticleArray[i].pressure);
-            }
+            // output buffer data 가져오기
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, OutputBuffer->Get());
+                glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
 
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+                // 일단 로그로 확인하자
+                for(unsigned int i = 0; i < Particle::TotalParticleCount; i++)
+                {
+                    SPDLOG_INFO("{} th position {}, {}, {}, {}", i, ParticleArray[i].position.x, ParticleArray[i].position.y, ParticleArray[i].position.z, ParticleArray[i].position.w);
 
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, InputBuffer->Get());
+                    SPDLOG_INFO("{} th velocity {}, {}, {}, {}", i, ParticleArray[i].velocity.x, ParticleArray[i].velocity.y, ParticleArray[i].velocity.z, ParticleArray[i].velocity.w);
+
+                    SPDLOG_INFO("{} th range {} {}", i, ParticleArray[i].range.x, ParticleArray[i].range.y);
+
+                    SPDLOG_INFO("{} th density {} pressure {}", i, ParticleArray[i].density, ParticleArray[i].pressure);
+
+                    SPDLOG_INFO("{} th toCamera {}", i, ParticleArray[i].toCamera);
+
+                    SPDLOG_INFO(" *** *** *** ");
+
+                    //SPDLOG_INFO("{} th surf normal {}, {}, {} isSurf {}", i, ParticleArray[i].surfNormal.x, ParticleArray[i].surfNormal.y, ParticleArray[i].surfNormal.z, ParticleArray[i].isSurf);
+
+                    //SPDLOG_INFO("{} th force {}, {}, {} toCamera {}", i, ParticleArray[i].force.x, ParticleArray[i].force.y, ParticleArray[i].force.z, ParticleArray[i].toCamera);
+                }
+
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, InputBuffer->Get());
+            
+                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
+
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+        glUseProgram(0);
+    }
+
+
+    // surf normal, issurf, force compute test
+    {
+
         
-            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
-
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
-        
-    glUseProgram(0);
+    }
 
     return true;
 }
@@ -290,37 +311,51 @@ void Context::Render()
     );
 
 
-    // // 가장 먼저 정렬된 배열 => 밀도와 압력을 구한다
-    // DensityPressureCompute->Use();
 
-    //     // Set Uniforms
-    //     DensityPressureCompute->SetUniform("h", SmoothKernelRadius);
-    //     DensityPressureCompute->SetUniform("hSquare", SmoothKernelRadius * SmoothKernelRadius);
+    /* 
+        Input Data
+            position
+            velocity
+            toCamera        를 이용해서
 
-    //     DensityPressureCompute->SetUniform("particleMass", Particle::ParticleMass);
-    //     DensityPressureCompute->SetUniform("particleCount", Particle::TotalParticleCount);
+        Output Data
+            position
+            velocity
+            range
+            density
+            pressure
+            toCamera        를 구한다
+     */
+    /*
+    {
+        DensityPressureCompute->Use();
 
-    //     DensityPressureCompute->SetUniform("gasCoeffi", gas.gasCoeffi);
-    //     DensityPressureCompute->SetUniform("gasCoeffi", gas.restDensity);
+            // Set Uniforms
+            DensityPressureCompute->SetUniform("h", SmoothKernelRadius);
+            DensityPressureCompute->SetUniform("hSquare", SmoothKernelRadius * SmoothKernelRadius);
 
-    //     glDispatchCompute(1, 1, 1);
-    //     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+            DensityPressureCompute->SetUniform("particleMass", Particle::ParticleMass);
+            DensityPressureCompute->SetUniform("TotalParticleCount", Particle::TotalParticleCount);
 
-    //     glBindBuffer(GL_SHADER_STORAGE_BUFFER, OutputBuffer->Get());
-    //         Particle tempParticle{};
-    //         tempParticle.density = -100.0f;
+            DensityPressureCompute->SetUniform("gasCoeffi", gas.gasCoeffi);
+            DensityPressureCompute->SetUniform("gasCoeffi", gas.restDensity);
 
-    //         // 연산 결과, Output 을 CPU 로 읽어오고
-    //         glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle), &tempParticle);
+            glDispatchCompute(1, 1, 1);
+            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
             
-    //         SPDLOG_INFO("temp particle density {}", tempParticle.density);
-
-    //     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-        
-    // glUseProgram(0);
+        glUseProgram(0);
+    }
+    */
 
 
-    // // 이후 각 입자의 알짜힘을 구함
+
+    /* 
+        이후
+        output data 에
+            surf normal
+            isSurf
+            force           를 구하고 저장한다
+     */
     // ForceCompute->Use();
     //     // Set Uniforms
     //     // 0
@@ -429,7 +464,7 @@ void Context::Render()
             // 정렬한 데이터를 이용해서, 카메라에서 가까운 것 부터 렌더링을 진행
             for(unsigned int i = 0; i < Particle::TotalParticleCount; i++)
             {
-                auto ParticlePos = glm::vec3(ParticleArray[i].Position.x, ParticleArray[i].Position.y, ParticleArray[i].Position.z);
+                auto ParticlePos = glm::vec3(ParticleArray[i].position.x, ParticleArray[i].position.y, ParticleArray[i].position.z);
 
                 auto modelTransform = glm::translate(glm::mat4(1.0f), ParticlePos);
                 auto transform = projection * view * modelTransform;

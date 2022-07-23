@@ -11,25 +11,22 @@ public:
     Particle(glm::vec4 pos, glm::vec3 camPos);
 
 
-    // std430 Memory Layout 에 의해, 4 vector 사용
-    glm::vec4 Position  = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-    glm::vec4 Velocity  = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+    // std430 Memory Layout => vec4 length
+    glm::vec4 position   = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 
-    //particle 에 가해지는 힘 => 최소 3가지 요소로 구성되어 있다
-    //압력 + 점성 + 표면장력
-    glm::vec4 force     = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
-        
-    //particle surface normal, 표면장력
-    glm::vec4 surfNormal = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+    glm::vec4 velocity   = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
 
+    glm::uvec2 range      = glm::uvec2(0, 0);
+    float density        = 0.0f;
+    float pressure       = 0.0f;
+
+    glm::vec3 surfNormal = glm::vec3(0.0f, 0.0f, 0.0f);  // particle surface normal
+    float isSurf         = 0.0f;                         // 0.0f == not surface
+
+    glm::vec3 force     = glm::vec3(0.0f, 0.0f, 0.0f);   // net force
+    float toCamera      = 0.0f;
     
-
-    // Properties, 4 float 로 맞춘다
-    float density       = 1.0f;
-    float pressure      = 0.0f;
-    float ToCamera      = 0.0f;
-    float padding       = -5.0f;
-
+    
 
 
     // Fluid 가 담기는 영역
