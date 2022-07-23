@@ -222,9 +222,9 @@ void Context::Render()
         ImGui::DragFloat("damping", &movvar.damping);
 
 
-        ImGui::DragFloat("pressureRatio", &pressureRatio, 0.001, 0.0, 1.0f);
-        ImGui::DragFloat("viscosityRatio", &viscosityRatio, 0.001, 0.0, 1.0f);
-        ImGui::DragFloat("surfaceRatio", &surfaceRatio, 0.001, 0.0, 1.0f);
+        ImGui::DragFloat("pressureRatio", &pressureRatio, 0.001f, 0.0f, 1.0f);
+        ImGui::DragFloat("viscosityRatio", &viscosityRatio, 0.001f, 0.0f, 1.0f);
+        ImGui::DragFloat("surfaceRatio", &surfaceRatio, 0.001f, 0.0f, 1.0f);
     }
     ImGui::End();
 
@@ -247,6 +247,8 @@ void Context::Render()
         MainCam->UpVec
     );
 
+    SPDLOG_INFO("Camera Pos {} {} {}", MainCam->Position.x, MainCam->Position.y, MainCam->Position.z);
+
 
     // 가장 먼저 정렬된 배열 => 밀도와 압력을 구한다
     DensityPressureCompute->Use();
@@ -263,77 +265,88 @@ void Context::Render()
 
         glDispatchCompute(1, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-        
-    glUseProgram(0);
-
-
-    // 이후 각 입자의 알짜힘을 구함
-    ForceCompute->Use();
-        // Set Uniforms
-        // 0
-        DensityPressureCompute->SetUniform("h", SmoothKernelRadius);
-        DensityPressureCompute->SetUniform("hSquare", SmoothKernelRadius * SmoothKernelRadius);
-
-        DensityPressureCompute->SetUniform("particleMass", Particle::ParticleMass);
-        DensityPressureCompute->SetUniform("particleCount", Particle::TotalParticleCount);
-        
-        // 1
-        ForceCompute->SetUniform("viscosity", forvar.viscosity);
-        ForceCompute->SetUniform("surfCoeffi", forvar.surfCoeffi);
-        ForceCompute->SetUniform("surfForceThreshold", forvar.surfForceThreshold);
-
-        // 2
-        ForceCompute->SetUniform("gravityAcel", forvar.gravityAcel);
-
-        ForceCompute->SetUniform("pressureRatio", pressureRatio);
-        ForceCompute->SetUniform("viscosityRatio", viscosityRatio);
-        ForceCompute->SetUniform("surfaceRatio", surfaceRatio);
-
-        glDispatchCompute(1, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, testBuffer->Get());
-            unsigned int temp;
-            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &temp);
-            SPDLOG_INFO("{}", temp);
-
-            temp = 0;
-            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &temp);
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-    glUseProgram(0);
-
-
-    // 계산 결과를 이용해서 움직이게 한다
-    MoveCompute->Use();
-        /* Uniform Variable 넣기 */
-        MoveCompute->SetUniform("deltaTime", movvar.deltaTime);
-        MoveCompute->SetUniform("LimitRange", Particle::FluidRange);
-        MoveCompute->SetUniform("damping", movvar.damping);
-        
-        // 현재 카메라의 위치를 Uniform 으로 설정
-        // Particle 이 최종적으로 움직인 위치에서 카메라까지의 거리를 구해야 한다
-        MoveCompute->SetUniform("CameraPos", MainCam->Position);
-
-
-        glDispatchCompute(1, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, OutputBuffer->Get());
-            // 연산 결과, Output 을 CPU 로 읽어오고
-            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
-            // Camera 까지의 거리를 기준으로 sort
-            std::sort(ParticleArray.begin(), ParticleArray.end(), ParticleCompare());
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+            Particle tempParticle{};
+            tempParticle.density = -100.0f;
 
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, InputBuffer->Get());
-            // sort 한 결과를 input buffer 에 넣는다
-            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
+            // 연산 결과, Output 을 CPU 로 읽어오고
+            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle), &tempParticle);
+            
+            SPDLOG_INFO("temp particle density {}", tempParticle.density);
+
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+        
+    glUseProgram(0);
+
+
+    // // 이후 각 입자의 알짜힘을 구함
+    // ForceCompute->Use();
+    //     // Set Uniforms
+    //     // 0
+    //     DensityPressureCompute->SetUniform("h", SmoothKernelRadius);
+    //     DensityPressureCompute->SetUniform("hSquare", SmoothKernelRadius * SmoothKernelRadius);
+
+    //     DensityPressureCompute->SetUniform("particleMass", Particle::ParticleMass);
+    //     DensityPressureCompute->SetUniform("particleCount", Particle::TotalParticleCount);
+        
+    //     // 1
+    //     ForceCompute->SetUniform("viscosity", forvar.viscosity);
+    //     ForceCompute->SetUniform("surfCoeffi", forvar.surfCoeffi);
+    //     ForceCompute->SetUniform("surfForceThreshold", forvar.surfForceThreshold);
+
+    //     // 2
+    //     ForceCompute->SetUniform("gravityAcel", forvar.gravityAcel);
+
+    //     ForceCompute->SetUniform("pressureRatio", pressureRatio);
+    //     ForceCompute->SetUniform("viscosityRatio", viscosityRatio);
+    //     ForceCompute->SetUniform("surfaceRatio", surfaceRatio);
+
+    //     glDispatchCompute(1, 1, 1);
+    //     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+
+    //     glBindBuffer(GL_SHADER_STORAGE_BUFFER, testBuffer->Get());
+    //         unsigned int temp;
+    //         glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &temp);
+    //         //SPDLOG_INFO("{}", temp);
+
+    //         temp = 0;
+    //         glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &temp);
+    //     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    // glUseProgram(0);
+
+
+    // // 계산 결과를 이용해서 움직이게 한다
+    // MoveCompute->Use();
+    //     /* Uniform Variable 넣기 */
+    //     MoveCompute->SetUniform("deltaTime", movvar.deltaTime);
+    //     MoveCompute->SetUniform("LimitRange", Particle::FluidRange);
+    //     MoveCompute->SetUniform("damping", movvar.damping);
+        
+    //     // 현재 카메라의 위치를 Uniform 으로 설정
+    //     // Particle 이 최종적으로 움직인 위치에서 카메라까지의 거리를 구해야 한다
+    //     MoveCompute->SetUniform("CameraPos", MainCam->Position);
+
+
+    //     glDispatchCompute(1, 1, 1);
+    //     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+    //     glBindBuffer(GL_SHADER_STORAGE_BUFFER, OutputBuffer->Get());
+    //         // 연산 결과, Output 을 CPU 로 읽어오고
+    //         glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
+    //         // Camera 까지의 거리를 기준으로 sort
+    //         std::sort(ParticleArray.begin(), ParticleArray.end(), ParticleCompare());
+    //     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+    //     glBindBuffer(GL_SHADER_STORAGE_BUFFER, InputBuffer->Get());
+    //         // sort 한 결과를 input buffer 에 넣는다
+    //         glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
+    //     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
         
 
-    glUseProgram(0);
+    // glUseProgram(0);
     
     /* 
         Output 버퍼에 들어있는 데이터들에서 한번더 정렬을 해야할 듯?

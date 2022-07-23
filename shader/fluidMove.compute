@@ -78,7 +78,8 @@ void Check_Range(uint idx)
         // 아니라면, 정해진 방향을 향하도록 속도를 바꾸고, 위치도 옮겨버린다
         else
         {
-            curParticle.Velocity.xyz = normalize(norVec) * damping * 0.001;
+            //curParticle.Velocity.xyz = normalize(norVec) * damping * 0.001;
+            curParticle.Velocity.xyz = vec3(0, 0, 0);
             curParticle.Position.xyz += (1.00001) * norVec;
 
             outputData[idx] = curParticle;
@@ -86,6 +87,8 @@ void Check_Range(uint idx)
 
 }
 
+
+// 지금까지 사용해왔던, output data 에 저장된 ToCamera 값 대신 새로운 값을 갱신
 void Get_Camera_Distance(uint idx)
 {
     Particle curParticle = outputData[idx];

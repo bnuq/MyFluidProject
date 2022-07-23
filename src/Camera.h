@@ -18,7 +18,7 @@ public:
 
 
     // 카메라의 위치 초기화
-    glm::vec3 Position          = glm::vec3(0.0f, 0.0f, -5.0f);
+    glm::vec3 Position          = glm::vec3(-4.25f, 7.7f, -19.0f);
 
     // 카메라 모델 좌표계
     glm::vec3 FrontVec          = glm::vec3(0.0f, 0.0f, 1.0f);
@@ -33,6 +33,7 @@ public:
     void Rotate(glm::vec2 deltaPos);
 
     void Move(int key);
+
 
 private:
     Camera() {}

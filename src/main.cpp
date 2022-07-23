@@ -146,7 +146,7 @@ int main(int argc, const char** argv)
     {
         curTime = glfwGetTime();       
         // 60FPS Rendering 
-        //if(curTime - prevTime >= 0.0016)
+        if(curTime - prevTime >= 0.008)
         {
             
             glfwPollEvents();
