@@ -39,10 +39,10 @@ public:
     static glm::uvec3 ParticleCount;
     
     // Particle 들의 총 개수
-    static int TotalParticleCount;
+    static unsigned int TotalParticleCount;
 
     // Particle 의 질량
-    static float ParticleMass;
+    static const float ParticleMass;
 };
 
 

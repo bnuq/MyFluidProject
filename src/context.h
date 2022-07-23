@@ -126,6 +126,19 @@ private:
 
 
     // 각 프로그램에서 필요로 하는 Uniform Variables
+        // 1. Smooth Kernel
+        float SmoothKernelRadius = 0.5f;
+        
+        // 2. Gas
+        struct Gas
+        {
+            float gasCoeffi   = 0.01f;
+            float restDensity = 1200.0f;
+        };
+        Gas gas;
+
+
+
     struct ForVar
     {
         float viscosity     = 0.001f;
@@ -146,16 +159,9 @@ private:
 
 
 
-    // Smooth Kernel
-    float SmoothKernelRadius = 2.0f;
+    
 
-    // Gas
-    struct Gas
-    {
-        float gasCoeffi   = 0.01f;
-        float restDensity = 1200.0f;
-    };
-    Gas gas;
+    
 
 
 

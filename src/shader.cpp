@@ -86,8 +86,5 @@ bool Shader::LoadFile(const std::string& filename, GLenum shaderType)
         SPDLOG_ERROR("reason: {}", infoLog);
         return false;
     }
-
-
-    SPDLOG_INFO("{} shader make, id = {}", filename, m_shader);
     return true;
 }

@@ -7,7 +7,7 @@ uniform float h;
 uniform float hSquare;
 
 uniform float particleMass;
-uniform float particleCount;
+uniform uint TotalParticleCount;
 
 uniform float gasCoeffi;
 uniform float restDensity;
@@ -19,7 +19,6 @@ uniform float restDensity;
     W_poly6 -> 변수인 r 의 제곱을 사용한다
     사용처
         : 밀도 계산
-        : color field 값
 */
 float W_Poly6(float r2) { return (315.0 / (64 * PI * pow(abs(h), 9.0) ) ) * pow(abs(hSquare - r2), 3); }
 
@@ -59,72 +58,85 @@ layout(std430, binding = 2) buffer OutputBuffer
 /* 
     여기서는 Particle 의 내부 값들을 업데이트
         다른 Particle 의 상태를 읽어야 하기 떄문에, 정렬된 input 이 필요하다
+    
+    input data 의
+        Position
+        Velocity
+        ToCamera
+
+        값들을 사용한다
  */
 void main()
 {
     // ssbo 에 접근하는 스레드의 인덱스
     uint Index = gl_GlobalInvocationID.x;
 
+    // 3. 밀도 => 매번 새롭게 구한다
+    float newDensity = 0.0;
+        // SPH 기법 ==> 주변 particle 의 값을 이용해서 자신의 값을 구한다
+        // 현재 input 은 정렬되어 있는 상태니까, 좌로 or 우로 검색하면서 영향력이 있는 거리내에 있는 particles 만 찾는다
+
+        uint RelativeFar  = Index;
+        uint RelativeNear = Index;
+    
+
+        // Index => 0 검색, Particle 보다 멀리 있는 Particles 를 조사한다
+        for(uint farId = Index; farId >= 0; farId--)
+        {
+            if(farId == 0)
+            {
+                RelativeFar = 0;
+                break;
+            }
+
+            if(inputData[farId].ToCamera > inputData[Index].ToCamera + h)
+                break;
+            else
+                RelativeFar = farId;
+        }
+            
+
+        // Index => particleCount 검색, Particle 보다 가까이 있는 Particles 를 조사한다
+        if(inputData[Index].ToCamera - h < 0)
+            RelativeNear = TotalParticleCount - 1;
+        else
+        {
+            for(uint nearId = Index; nearId < TotalParticleCount; nearId++)
+            {
+                if(inputData[nearId].ToCamera < inputData[Index].ToCamera - h)
+                    break;
+                else
+                    RelativeNear = nearId;
+            }
+        }
+        
+        /* 
+            자기 자신이 검색 대상에 포함된다
+            particle 스스로의 질량으로 density 와 pressure 를 만들어 낸다
+         */
+        for(uint id = RelativeFar; id <= RelativeNear; id++)
+        {
+            vec3 relativePos = inputData[Index].Position.xyz - inputData[id].Position.xyz;
+            float rSquare = dot(relativePos, relativePos);
+
+            if(rSquare < hSquare) // Get In
+                newDensity += particleMass * W_Poly6(rSquare);
+        }
+    outputData[Index].density = newDensity;
+
+    // density -> pressure 계산, 논문에서 사용한 수정된 이상기체 방정식을 이용
+    outputData[Index].pressure = gasCoeffi * max(newDensity - restDensity, 0.0f);
+    
     // 0. ToCamera => 카메라까지의 거리를 전달
     outputData[Index].ToCamera = inputData[Index].ToCamera;
+
 
     // 1. Position => 그대로 전달
     outputData[Index].Position = inputData[Index].Position;
 
+
     // 2. Velocity => 그대로 전달
     outputData[Index].Velocity = inputData[Index].Velocity;
-
-    // 3. 밀도 => 매번 새롭게 구한다
-    float newDensity = -99.0;
-        // SPH 기법 ==> 주변 particle 의 값을 이용해서 자신의 값을 구한다
-        // 현재 input 은 정렬되어 있는 상태니까, 좌로 or 우로 검색하면서 영향력이 있는 거리내에 있는 particles 만 찾는다
-        // 좌 검색
-        for(uint otherId = Index - 1; otherId >= 0; otherId--)
-        {
-            // 다른 파티클~카메라 까지 거리가, 내 카메라까지 거리 - h 보다 작으면, 그 이후부턴 무조건 멀다
-            if(inputData[otherId].ToCamera < inputData[Index].ToCamera - h)
-                break;
-
-            // 그 외의 경우에 대해서는 모두 조사한다
-
-            // 두 파티클 사이의 거리를 구한다
-            vec3 relativePos = inputData[Index].Position.xyz - inputData[otherId].Position.xyz;
-            float rSquare = dot(relativePos, relativePos);
-
-            // 영향력 있는 거리 안이다
-            if(rSquare < hSquare)
-                newDensity += particleMass * W_Poly6(rSquare);
-        }
-
-
-        // 우 검색
-        for(uint otherId = Index + 1; otherId < particleCount; otherId++)
-        {
-            // 카메라에서 => 다른 파티클까지의 거리가, 나까지의 거리 + h 보다 크면, 그 이후부터는 무조건 멀다
-            if(inputData[otherId].ToCamera > inputData[Index].ToCamera + h)
-                break;
-
-            // 그 외의 경우에 대해서는, 모두 조사한다
-
-            // 두 파티클 사이의 거리를 구한다
-            vec3 relativePos = inputData[Index].Position.xyz - inputData[otherId].Position.xyz;
-            float rSquare = dot(relativePos, relativePos);
-
-            // 영향력 있는 거리 안이다
-            if(rSquare < hSquare)
-                newDensity += particleMass * W_Poly6(rSquare);
-        }
-
-        //혹시 모르니까, 밀도 값은 음수 값을 가질 수 없다
-        //newDensity = max(newDensity, 0.00001);
-
-    // 새로 구한 밀도 값을 output data 에 넣는다
-    outputData[Index].density = newDensity;
-
-
-    // 4. 압력 => 새로 구한 밀도를 바탕으로, particle 이 가지는 압력을 구한다
-    // 논문에 의해서, 수정된 이상기체 방정식을 사용하도록 한다
-    outputData[Index].pressure = gasCoeffi * max(newDensity - restDensity, 0.0f);
 }
 
 // force, pressure 를 제외한 모든 데이터 입력 완료
