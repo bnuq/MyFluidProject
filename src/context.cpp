@@ -25,15 +25,21 @@ bool Context::Init()
     DensityPressureCompute = Program::Create({ FluidDensityPressure });
     if(!DensityPressureCompute) return false;
 
+
+
     // 2. Force 만 계산
     FluidForce = Shader::CreateFromFile("./shader/FluidForce.compute", GL_COMPUTE_SHADER);
     ForceCompute = Program::Create({ FluidForce });
     if(!ForceCompute) return false;
 
+
+
     // 3. Velocity, Position, ToCamera 계산
     FluidMove = Shader::CreateFromFile("./shader/FluidMove.compute", GL_COMPUTE_SHADER);
     MoveCompute = Program::Create({ FluidMove });
     if(!MoveCompute) return false;
+
+
 
     // 4. Fluid Rendering
     DrawProgram = Program::Create("./shader/fluid.vs", "./shader/fluid.fs");
@@ -49,47 +55,53 @@ bool Context::Init()
     BoxMesh = Mesh::CreateBox();
 
 
+
     // Particle 들의 초기 정보를 초기화 한다
-    InitParticles();
+    Init_CoreParticles();
 
 
-    // GPU 에서 데이터를 저장할 SSBO 버퍼를 생성, 초기화한 Particles 정보를 복사 => GPU 에 넣는다
-    // 버퍼 2개 모두 처음에 동일하게 초기화한다
+
+    // GPU 에서 데이터를 저장할 SSBO 버퍼를 생성
+    // Core Particle => 데이터를 복사해서 GPU 에 넣는다
+    CoreParticleBuffer
+        = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, CoreParticleArray.data(), sizeof(CoreParticle), CoreParticleArray.size());
+
+    // Particle      => 복사할 데이터는 없고, GPU 내에 공간만 할당해 놓는다
     ParticleBuffer 
-        = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, ParticleArray.data(), sizeof(Particle), ParticleArray.size());
+        = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, NULL, sizeof(Particle), CoreParticleArray.size());
+
 
     unsigned int temp = 0;
     CountBuffer = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, &temp, sizeof(unsigned int), 1);
 
-    /* 
-        SSBO 버퍼를 각 인덱스에 바인딩
-
-        Input Buffer   == 1 index
-        Output Buffer  == 2 index
-     */
+    
+    /* SSBO 버퍼를 각 인덱스에 바인딩 */
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, CoreParticle_Index, CoreParticleBuffer->Get());
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Particle_Index, ParticleBuffer->Get());
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Count_Index, CountBuffer->Get());
 
-    /* 
-        컴퓨트 프로그램과 SSBO 를 연결
-     */
+    
+    
+    /* 컴퓨트 프로그램과 SSBO 를 연결 */
     GLuint blockIndex{};
 
-
     // 1. Density, Pressure
-    blockIndex = glGetProgramResourceIndex(DensityPressureCompute->Get(), GL_SHADER_STORAGE_BUFFER, "ParticleBuffer");
-    glShaderStorageBlockBinding(DensityPressureCompute->Get(), blockIndex, Particle_Index);
+        blockIndex = glGetProgramResourceIndex(DensityPressureCompute->Get(), GL_SHADER_STORAGE_BUFFER, "CoreParticleBuffer");
+        glShaderStorageBlockBinding(DensityPressureCompute->Get(), blockIndex, CoreParticle_Index);
+        blockIndex = glGetProgramResourceIndex(DensityPressureCompute->Get(), GL_SHADER_STORAGE_BUFFER, "ParticleBuffer");
+        glShaderStorageBlockBinding(DensityPressureCompute->Get(), blockIndex, Particle_Index);
 
 
     // 2. Force
-    blockIndex = glGetProgramResourceIndex(ForceCompute->Get(), GL_SHADER_STORAGE_BUFFER, "ParticleBuffer");
-    glShaderStorageBlockBinding(ForceCompute->Get(), blockIndex, Particle_Index);
+        blockIndex = glGetProgramResourceIndex(ForceCompute->Get(), GL_SHADER_STORAGE_BUFFER, "ParticleBuffer");
+        glShaderStorageBlockBinding(ForceCompute->Get(), blockIndex, Particle_Index);
     
 
     // 3. Move
-    blockIndex = glGetProgramResourceIndex(MoveCompute->Get(), GL_SHADER_STORAGE_BUFFER, "ParticleBuffer");
-    glShaderStorageBlockBinding(MoveCompute->Get(), blockIndex, Particle_Index);
-
+        blockIndex = glGetProgramResourceIndex(MoveCompute->Get(), GL_SHADER_STORAGE_BUFFER, "ParticleBuffer");
+        glShaderStorageBlockBinding(MoveCompute->Get(), blockIndex, Particle_Index);
+        blockIndex = glGetProgramResourceIndex(MoveCompute->Get(), GL_SHADER_STORAGE_BUFFER, "CoreParticleBuffer");
+        glShaderStorageBlockBinding(MoveCompute->Get(), blockIndex, CoreParticle_Index);
 
 
 
@@ -111,7 +123,7 @@ bool Context::Init()
             glDispatchCompute(GroupNum, 1, 1);
             glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-            // output buffer data 가져오기
+            // output 인 Particle data 를 확인
             glBindBuffer(GL_SHADER_STORAGE_BUFFER, ParticleBuffer->Get());
                 glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
 
@@ -192,7 +204,7 @@ bool Context::Init()
 
 
 // 정해진 Range 에 Particles 를 집어 넣는다
-void Context::InitParticles()
+void Context::Init_CoreParticles()
 {
     // Particle::Fluid Range 를 균등하게 나눈다, Particle 들이 들어갈 수 있도록
     float xStride = Particle::FluidRange.x / (Particle::ParticleCount.x + 1);
@@ -206,9 +218,14 @@ void Context::InitParticles()
         {
             for(unsigned int zCount = 1; zCount <= Particle::ParticleCount.z; zCount++)
             {
-                // position, velocity, toCamera 값만 초기화
-                ParticleArray.push_back( 
-                    Particle(glm::vec4(xStride * xCount, yStride * yCount, zStride * zCount, 1.0f), MainCam->Position)
+                // Core Particle Initialize
+                CoreParticleArray.push_back
+                ( 
+                    CoreParticle
+                    (
+                        glm::vec4(xStride * xCount, yStride * yCount, zStride * zCount, 1.0f),
+                        MainCam->Position
+                    )
                 );
             }
         }
@@ -216,7 +233,11 @@ void Context::InitParticles()
 
     // 카메라까지의 거리를 기준으로 정렬한다
     // 멀리 있는 것이 앞으로 온다
-    std::sort(ParticleArray.begin(), ParticleArray.end(), ParticleCompare());
+    std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticleCompare());
+
+
+
+    ParticleArray.resize(CoreParticleArray.size());
 }
 
 
@@ -518,14 +539,17 @@ void Context::Get_Move()
         glDispatchCompute(GroupNum, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, ParticleBuffer->Get());
+        // Core Particle 데이터를 읽어온다
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, CoreParticleBuffer->Get());
             // 연산 결과, Output 을 CPU 로 읽어오고
-            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
+            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
+
             // Camera 까지의 거리를 기준으로 sort
-            std::sort(ParticleArray.begin(), ParticleArray.end(), ParticleCompare());
+            std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticleCompare());
+
             // 다시 넣어준다
-            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);       
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
     glUseProgram(0);
 }
@@ -536,10 +560,12 @@ void Context::Draw_Particles(const glm::mat4& projection, const glm::mat4& view)
     // output 버퍼에 저장된 데이터를 이용해서, Particles 를 그린다
     DrawProgram->Use();
   
-            // 정렬한 데이터를 이용해서, 카메라에서 가까운 것 부터 렌더링을 진행
+            // 정렬된 Core Particle 데이터를 이용해서, 카메라에서 가까운 것 부터 렌더링을 진행
             for(unsigned int i = 0; i < Particle::TotalParticleCount; i++)
             {
-                auto ParticlePos = glm::vec3(ParticleArray[i].position.x, ParticleArray[i].position.y, ParticleArray[i].position.z);
+                auto ParticlePos = glm::vec3(
+                        CoreParticleArray[i].xpos, CoreParticleArray[i].ypos, CoreParticleArray[i].zpos
+                    );
 
                 auto modelTransform = glm::translate(glm::mat4(1.0f), ParticlePos);
                 auto transform = projection * view * modelTransform;
@@ -549,7 +575,6 @@ void Context::Draw_Particles(const glm::mat4& projection, const glm::mat4& view)
 
 
                 BoxMesh->Draw(DrawProgram.get());
-
             }
 
     glUseProgram(0);

@@ -95,8 +95,7 @@ struct Particle
     float toCamera;
 };
 
-
-layout(std430, binding = 1) buffer ParticleBuffer
+layout(std430, binding = 2) buffer ParticleBuffer
 {
     Particle pData[];
 };

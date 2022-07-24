@@ -1,13 +1,5 @@
 #include "Particle.h"
 
-Particle::Particle(glm::vec4 pos, glm::vec3 camPos)
-: position( pos )
-{
-    toCamera = glm::distance(glm::vec3(pos.x, pos.y, pos.z), camPos);
-
-    // test velocity
-    //velocity = glm::vec4(pos.z, pos.x, pos.y, 0);
-}
 
 
 // Fluid 가 존재하는, 영역 => (0, 0, 0) 를 기준으로, xyz 로 길이를 지정

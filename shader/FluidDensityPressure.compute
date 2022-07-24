@@ -24,21 +24,42 @@ float W_Poly6(float r2) { return (315.0 / (64 * PI * pow(abs(h), 9.0) ) ) * pow(
 
 
 /*
-    정렬된 배열 ParticleBuffer 입력 상황
+    입력 : Core Particle Buffer
+        정렬된 버퍼
         파티클 ~ 카메라 거리, toCamera 값으로 정렬
         Far -> Near 순서로 정렬
 
-    position;                  position
+    [Core Particle]           [Particle]
 
-    velocity;                  velocity
+    xpos, ypos, zpos          position
 
-    -                       =>      range           , Update_Range
-    -                       =>      density         , Update_Density_Pressure
-    -                               pressure        , Update_Density_Pressure
+    xvel, yvel, zvel          velocity
+
+    -                 =>      range           , Update_Range
+    -                 =>      density         , Update_Density_Pressure
+    -                         pressure        , Update_Density_Pressure
 
     -
-    toCamera;                 toCamera
+    toCamera                  toCamera
  */
+struct CoreParticle
+{
+    float xpos;
+    float ypos;
+    float zpos;
+
+    float xvel;
+    float yvel;
+    float zvel;
+
+    float toCamera;
+};
+
+layout(std430, binding = 1) buffer CoreParticleBuffer
+{
+    CoreParticle cData[];
+};
+
 
 struct Particle
 {
@@ -54,7 +75,7 @@ struct Particle
     float toCamera;
 };
 
-layout(std430, binding = 1) buffer ParticleBuffer
+layout(std430, binding = 2) buffer ParticleBuffer
 {
     Particle pData[];
 };
@@ -72,14 +93,30 @@ layout(std430, binding = 1) buffer ParticleBuffer
 
     즉, range = 가능성이 있는 인덱스 범위
  */
-void Update_Range(uint myId)
+
+
+
+void main()
 {
-    uint PossibleFar  = myId;        // 가능성이 있는 영역의 파티클 중, 카메라에서 가장 멀리 있는 파티클 인덱스
-    uint PossibleNear = myId;        // 가능성이 있는 영역의 파티클 중, 카메라에서 가장 가까이 있는 파티클 인덱스
+    // ssbo 에 접근하는 스레드의 인덱스
+    uint index = gl_GlobalInvocationID.x;
+
+    // update position
+        pData[index].position = vec4( cData[index].xpos, cData[index].ypos, cData[index].zpos, 1.0 );
+
+    // update velocity
+        pData[index].velocity = vec4( cData[index].xvel, cData[index].yvel, cData[index].zvel, 0.0 );
+
+    // update toCamera
+        pData[index].toCamera = cData[index].toCamera;
+
+
+
+    uint PossibleFar  = index;        // 가능성이 있는 영역의 파티클 중, 카메라에서 가장 멀리 있는 파티클 인덱스
+    uint PossibleNear = index;        // 가능성이 있는 영역의 파티클 중, 카메라에서 가장 가까이 있는 파티클 인덱스
     
-    
-    // myId => 0 검색, Current Particle 보다 멀리 있는 Particles 를 조사한다
-    for(uint farId = myId; farId >= 0; farId--)
+    // index => 0 검색, Current Particle 보다 멀리 있는 Particles 를 조사한다
+    for(uint farId = index; farId >= 0; farId--)
     {
         if(farId == 0)
         {
@@ -87,21 +124,21 @@ void Update_Range(uint myId)
             break;
         }
 
-        if(pData[farId].toCamera >= pData[myId].toCamera + h)    
+        if(cData[farId].toCamera >= cData[index].toCamera + h)    
             break;
         else
             PossibleFar = farId;
     }
 
 
-    // myId => particleCount 검색, Current Particle 보다 가까이 있는 Particles 를 조사한다
-    if(pData[myId].toCamera - h < 0)   // h 가 긴 경우 => 모든 파티클을 조사
+    // index => particleCount 검색, Current Particle 보다 가까이 있는 Particles 를 조사한다
+    if(cData[index].toCamera - h < 0)   // h 가 긴 경우 => 모든 파티클을 조사
         PossibleNear = TotalParticleCount - 1;
     else
     {
-        for(uint nearId = myId; nearId < TotalParticleCount; nearId++)
+        for(uint nearId = index; nearId < TotalParticleCount; nearId++)
         {
-            if(pData[nearId].toCamera <= pData[myId].toCamera - h)
+            if(cData[nearId].toCamera <= cData[index].toCamera - h)
                 break;
             else
                 PossibleNear = nearId;
@@ -110,18 +147,14 @@ void Update_Range(uint myId)
 
 
     /* 
-        Update
-
-        x => far
-        y => near
+        update range
+            x => far, y => near
      */
-    pData[myId].range.x = PossibleFar;
-    pData[myId].range.y = PossibleNear;
-}
+        pData[index].range.x = PossibleFar;
+        pData[index].range.y = PossibleNear;
 
 
-void Update_Density_Pressure(uint myId)
-{    
+
     float newDensity = 0.0;     // 새로운 밀도
     float newPressure = 0.0;    // 새로운 압력
 
@@ -135,9 +168,10 @@ void Update_Density_Pressure(uint myId)
         Far index -> Near index 로 검색
             인덱스 증가
      */
-    for(uint neId = pData[myId].range.x; neId <= pData[myId].range.y; neId++)
+    for(uint neId = pData[index].range.x; neId <= pData[index].range.y; neId++)
     {
-        vec3 relativePos = pData[myId].position.xyz - pData[neId].position.xyz;
+        vec3 relativePos = vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos) - vec3(cData[neId].xpos, cData[neId].ypos, cData[neId].zpos);
+
         float rSquare = dot(relativePos, relativePos);
 
         if(rSquare < hSquare)       // 실제 영향 여부는 직접 체크해야 한다
@@ -149,17 +183,6 @@ void Update_Density_Pressure(uint myId)
 
 
     // Update
-    pData[myId].density  = newDensity;
-    pData[myId].pressure = newPressure;
-}
-
-
-
-void main()
-{
-    // ssbo 에 접근하는 스레드의 인덱스
-    uint index = gl_GlobalInvocationID.x;
-
-    Update_Range(index);
-    Update_Density_Pressure(index);
+        pData[index].density  = newDensity;
+        pData[index].pressure = newPressure;
 }

@@ -5,17 +5,20 @@
 
 
 // CPU -> GPU 사이로 주고 받는 데이터 형식, 꼭 필요한 것만 넣었다
-class Particle_Core
+class CoreParticle
 {
     public:
-    glm::vec4 position      = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-    glm::vec4 velocity      = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    CoreParticle(glm::vec3 pos, glm::vec3 camPos)
+    {
+        xpos = pos.x; ypos = pos.y; zpos = pos.z; 
+        xvel = 0.0f;  yvel = 0.0f;  zvel = 0.0f; 
 
-    float toCamera          = 0.0f;
+        toCamera = glm::distance(camPos, glm::vec3(xpos, ypos, zpos));
+    }
 
-    float padding1;
-    float padding2;
-    float padding3;
+    float xpos, ypos, zpos;
+    float xvel, yvel, zvel;
+    float toCamera;
 };
 
 
@@ -24,8 +27,8 @@ class Particle_Core
 class Particle
 {
 public:
-    Particle() {}
-    Particle(glm::vec4 pos, glm::vec3 camPos);
+    // Particle() {}
+    // Particle(glm::vec4 pos, glm::vec3 camPos);
 
 
     // std430 Memory Layout => vec4 length

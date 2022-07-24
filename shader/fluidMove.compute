@@ -4,6 +4,8 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 
 /*
+    [Particle]                  [Core Particle]
+
     position                    new position
 
     velocity                    new velocity
@@ -18,6 +20,24 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
                                     position 이 바뀌었으니까
                                     새로 구해줘야지
  */
+struct CoreParticle
+{
+    float xpos;
+    float ypos;
+    float zpos;
+
+    float xvel;
+    float yvel;
+    float zvel;
+
+    float toCamera;
+};
+
+layout(std430, binding = 1) buffer CoreParticleBuffer
+{
+    CoreParticle cData[];
+};
+
 
 struct Particle
 {
@@ -33,11 +53,15 @@ struct Particle
     float toCamera;
 };
 
-
-layout(std430, binding = 1) buffer ParticleBuffer
+layout(std430, binding = 2) buffer ParticleBuffer
 {
     Particle pData[];
 };
+
+
+
+
+
 
 
 uniform float deltaTime;
@@ -65,14 +89,6 @@ uniform vec3 CameraPos;
 
 
 
-// 지금까지 사용해왔던, output data 에 저장된 ToCamera 값 대신 새로운 값을 갱신
-void Get_Camera_Distance(uint idx)
-{
-    Particle curParticle = pData[idx];
-        
-
-    pData[idx] = curParticle;
-}
 
 void main()
 {
@@ -80,12 +96,10 @@ void main()
     uint index = gl_GlobalInvocationID.x;
 
 
-    // velocity update
     pData[index].velocity.xyz += deltaTime * (pData[index].force.xyz / pData[index].density);
-    // position update
     pData[index].position.xyz += deltaTime * pData[index].velocity.xyz;
 
-    
+
     // 경계 체크
     // 경계를 벗어난 파티클 => 돌아가야 하는 경계를 가리키는 벡터
     vec3 OverVec = vec3(0, 0, 0);
@@ -108,6 +122,16 @@ void main()
     }
 
 
-    // 최종 위치를 이용해서, 파티클에서 카메라까지 거리를 구한다
-    pData[index].toCamera = distance(CameraPos, pData[index].position.xyz);
+    // update position
+    cData[index].xpos = pData[index].position.x;
+    cData[index].ypos = pData[index].position.y;
+    cData[index].zpos = pData[index].position.z;
+    
+    // update velocity    
+    cData[index].xvel = pData[index].velocity.x;
+    cData[index].yvel = pData[index].velocity.y;
+    cData[index].zvel = pData[index].velocity.z;
+
+    // update toCamera
+    cData[index].toCamera = distance(CameraPos, pData[index].position.xyz);
 }

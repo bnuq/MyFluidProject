@@ -91,15 +91,20 @@ private:
 
     // 유체를 구성하는 Particle Struct
     // Particle 데이터를 저장하는 배열 => CPU
+    std::vector<CoreParticle> CoreParticleArray{};
+
+
+    // 일단 중간중간에 Particle 내용을 확인하기 위해 사용하는 array
     std::vector<Particle> ParticleArray{};
 
+
     // Particle 들의 초기 위치 값을 넣는 함수
-    void InitParticles();
+    void Init_CoreParticles();
 
     // Particle 들을 카메라 까지의 거리로 정렬하는 function object
-    struct ParticleCompare
+    struct CoreParticleCompare
     {
-        bool operator()(const Particle& p1, const Particle& p2)
+        bool operator()(const CoreParticle& p1, const CoreParticle& p2)
         {
             // 카메라까지의 거리가 긴 것 => 짧은 것, 순서로 정렬한다
             return p1.toCamera > p2.toCamera;
@@ -109,18 +114,17 @@ private:
 
 
 
-    /*  SSBO Buffer
-
-        Particle 데이터를 저장하는 SSBO 버퍼 => GPU 에서 정보를 저장
-        같은 버퍼를 2개 생성한다
-        한쪽에서 읽고, 다른 쪽으로 출력해
-        이후 두 버퍼를 스왑, Compute Program 에 입력과 출력이 번갈아서 연결되도록 한다
+    /*  
+        SSBO Buffer
      */
-    BufferPtr ParticleBuffer;
+    BufferPtr CoreParticleBuffer;       // Core Particle 데이터를 저장, 해당 타입으로 데이터를 주고 받는다
+    BufferPtr ParticleBuffer;           // Particle 데이터, GPU 내에서만 저장하고 사용
     BufferPtr CountBuffer;
 
 
-    unsigned int Particle_Index  = 1;
+    unsigned int CoreParticle_Index  = 1;
+    unsigned int Particle_Index  = 2;
+
     unsigned int Count_Index = 5;
 
 
