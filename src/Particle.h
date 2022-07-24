@@ -39,7 +39,7 @@ public:
     static unsigned int TotalParticleCount;
 
     // Particle ÀÇ Áú·®
-    static const float ParticleMass;
+    static float ParticleMass;
 };
 
 

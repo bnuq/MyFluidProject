@@ -127,7 +127,7 @@ private:
 
     // 각 프로그램에서 필요로 하는 Uniform Variables
         // 1. Smooth Kernel
-        float SmoothKernelRadius = 0.5f;
+        float SmoothKernelRadius = 1.0f;
         
         // 2. Gas
         struct Gas
@@ -143,7 +143,7 @@ private:
     {
         float viscosity     = 0.001f;
         float surfCoeffi    = 1.0f;
-        float surfForceThreshold = 0.1f;
+        float surfForceThreshold = 0.01f;
 
         glm::vec4 gravityAcel = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
     };

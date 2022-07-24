@@ -130,6 +130,7 @@ bool Context::Init()
             glBindBuffer(GL_SHADER_STORAGE_BUFFER, OutputBuffer->Get());
                 glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
 
+                SPDLOG_INFO("Density Pressure Compute");
                 // 일단 로그로 확인하자
                 for(unsigned int i = 0; i < Particle::TotalParticleCount; i++)
                 {
@@ -139,32 +140,76 @@ bool Context::Init()
 
                     SPDLOG_INFO("{} th range {} {}", i, ParticleArray[i].range.x, ParticleArray[i].range.y);
 
-                    SPDLOG_INFO("{} th density {} pressure {}", i, ParticleArray[i].density, ParticleArray[i].pressure);
+                    SPDLOG_INFO("{} th density {}", i, ParticleArray[i].density);
+
+                    SPDLOG_INFO("{} th pressure {}", i, ParticleArray[i].pressure);
 
                     SPDLOG_INFO("{} th toCamera {}", i, ParticleArray[i].toCamera);
 
-                    SPDLOG_INFO(" *** *** *** ");
-
-                    //SPDLOG_INFO("{} th surf normal {}, {}, {} isSurf {}", i, ParticleArray[i].surfNormal.x, ParticleArray[i].surfNormal.y, ParticleArray[i].surfNormal.z, ParticleArray[i].isSurf);
-
-                    //SPDLOG_INFO("{} th force {}, {}, {} toCamera {}", i, ParticleArray[i].force.x, ParticleArray[i].force.y, ParticleArray[i].force.z, ParticleArray[i].toCamera);
+                    SPDLOG_INFO("*** *** *** ***");
                 }
 
             glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
-            glBindBuffer(GL_SHADER_STORAGE_BUFFER, InputBuffer->Get());
-            
-                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
-
-            glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
         glUseProgram(0);
     }
 
 
     // surf normal, issurf, force compute test
     {
+        ForceCompute->Use();
+            // Set Uniforms
+            // 0
+            ForceCompute->SetUniform("h", SmoothKernelRadius);
+            ForceCompute->SetUniform("hSquare", SmoothKernelRadius * SmoothKernelRadius);
 
-        
+            
+            ForceCompute->SetUniform("particleMass", Particle::ParticleMass);
+            ForceCompute->SetUniform("particleCount", Particle::TotalParticleCount);
+            
+            // 1
+            ForceCompute->SetUniform("viscosity", forvar.viscosity);
+            ForceCompute->SetUniform("surfCoeffi", forvar.surfCoeffi);
+            ForceCompute->SetUniform("surfForceThreshold", forvar.surfForceThreshold);
+
+            // 2
+            ForceCompute->SetUniform("gravityAcel", forvar.gravityAcel);
+
+
+            glDispatchCompute(1, 1, 1);
+            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, testBuffer->Get());
+                unsigned int temp;
+                glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &temp);
+                SPDLOG_INFO("surface count is {}", temp);
+
+                temp = 0;
+                glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &temp);
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+
+            // output buffer data 가져오기
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, OutputBuffer->Get());
+                glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
+
+
+                SPDLOG_INFO("Surface Force Compute");
+                // 일단 로그로 확인하자
+                for(unsigned int i = 0; i < Particle::TotalParticleCount; i++)
+                {
+                    SPDLOG_INFO("{} th surf normal {}, {}, {}", i, ParticleArray[i].surfNormal.x, ParticleArray[i].surfNormal.y, ParticleArray[i].surfNormal.z);
+
+                    SPDLOG_INFO("{} th isSurf {}", i, ParticleArray[i].isSurf);
+
+                    SPDLOG_INFO("{} th force {}, {}, {}", i, ParticleArray[i].force.x, ParticleArray[i].force.y, ParticleArray[i].force.z);
+
+                    SPDLOG_INFO("--- --- --- ---");
+                }
+
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+        glUseProgram(0);
     }
 
     return true;

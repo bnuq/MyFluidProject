@@ -3,9 +3,9 @@
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 
-// 넘겨받는 Uniform Variables
+// 넘겨받는 Uniform Variables{}
 // 0
-    // Smooth Kernel 관련 정보
+// Smooth Kernel 관련 정보
     uniform float h;
     uniform float hSquare;
 
@@ -22,12 +22,7 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
     uniform float surfForceThreshold;
 
 // 2 => Extra Force
-    uniform vec4 gravityAcel;
-
-
-uniform float pressureRatio;
-uniform float viscosityRatio;
-uniform float surfaceRatio;
+    uniform vec3 gravityAcel;
 
 
     
@@ -72,7 +67,7 @@ uniform float surfaceRatio;
 
 /* 
     Output Data 에서,
-    Position, Velocity, density, pressure 는 계산이 완료된 상태
+    position, velocity, density, pressure 는 계산이 완료된 상태
 
     force, surfNormal 을 구해서 넣어주어야 한다
 
@@ -80,14 +75,19 @@ uniform float surfaceRatio;
  */
 struct Particle
 {
-    vec4 Position;
-    vec4 Velocity;
-    vec4 force;
-    vec4 surfNormal;
+    vec4 position;
+
+    vec4 velocity;
+
+    uvec2 range;
     float density;
     float pressure;
-    float ToCamera;
-    float padding;
+
+    vec3 surfNormal;    // 0.
+    float isSurf;       // 0.
+
+    vec3 force;         // 1, 2s
+    float toCamera;
 };
 layout(std430, binding = 2) buffer OutputBuffer
 {
@@ -117,89 +117,70 @@ layout(std430, binding = 5) buffer TestBuffer
  */
 
 
-// 0. 가장 먼저 surfNormal 구하기
+// surf normal, isSurf 계산
 void Update_SurfNormal(uint idx)
 {
-    vec4 newSurfNormal = vec4(0.0, 0.0, 0.0, 0.0);
+    vec3 newSurfNormal = vec3(0.0, 0.0, 0.0);
 
-        // 좌 검색
-        for(uint otherId = idx - 1; otherId >= 0; otherId--)
-        {
-            // 다른 파티클~카메라 까지 거리가, 내 카메라까지 거리 - h 보다 작으면, 그 이후부턴 무조건 멀다
-            if(outputData[otherId].ToCamera < outputData[idx].ToCamera - h)
-                break;
+    // range 범위를 조사, far->near
+    for(uint id = outputData[idx].range.x; id <= outputData[idx].range.y; id++)
+    {
+        // 두 파티클 사이의 거리를 구한다
+        vec3 relativePos = outputData[idx].position.xyz - outputData[id].position.xyz;
+        float rSquare = dot(relativePos, relativePos);
 
-            // 두 파티클 사이의 거리를 구한다
-            vec3 relativePos = outputData[idx].Position.xyz - outputData[otherId].Position.xyz;
-            float rSquare = dot(relativePos, relativePos);
-
-            // 영향력 있는 거리 안이다
-            if(rSquare < hSquare)
-                newSurfNormal.xyz += particleMass / outputData[otherId].density * Grad_W_Poly6(rSquare) * relativePos;
-        }
+        // 영향력 있는 거리 안이다
+        if(rSquare < hSquare)
+            newSurfNormal += particleMass / outputData[id].density * Grad_W_Poly6(rSquare) * relativePos;
+            //newSurfNormal += vec3(1, 0, 0);
+    }
 
 
-        // 우 검색
-        for(uint otherId = idx + 1; otherId < particleCount; otherId++)
-        {
-            // 카메라에서 => 다른 파티클까지의 거리가, 나까지의 거리 + h 보다 크면, 그 이후부터는 무조건 멀다
-            if(outputData[otherId].ToCamera > outputData[idx].ToCamera + h)
-                break;
-
-            // 두 파티클 사이의 거리를 구한다
-            vec3 relativePos = outputData[idx].Position.xyz - outputData[otherId].Position.xyz;
-            float rSquare = dot(relativePos, relativePos);
-
-            // 영향력 있는 거리 안이다
-            if(rSquare < hSquare)
-                newSurfNormal.xyz += particleMass / outputData[otherId].density * Grad_W_Poly6(rSquare) * relativePos;
-        }
-
-    // threshold 보다 크면 표면 => 카운트 세고, 저장
-    if(length(outputData[idx].surfNormal) > surfForceThreshold)
+    // 연산결과가 threshold 보다 크다 == It is Surface => 카운트 세고, particle 정보에 저장
+    if(length(newSurfNormal) > surfForceThreshold)
     {
         atomicAdd(count, 1);
-        outputData[idx].surfNormal = newSurfNormal;
+        outputData[idx].isSurf = 1.0f;
     }
-    // 표면이 아니면, zero vector 를 넣자
+    // 표면이 아니면, surface 가 아님을 기록
     else
-        outputData[idx].surfNormal = vec4(0.0, 0.0, 0.0, 0.0);
+        outputData[idx].isSurf = 0.0f;
+
+
+    // surface normal 저장
+    outputData[idx].surfNormal = newSurfNormal;
 }
 
 
-// 1. 주변에 영향을 받는 힘을 구한다
-vec4 Get_Fluid_Force(uint idx)
+// force => 주변에 영향을 받는 힘을 구한다
+void Get_Fluid_Force(uint idx)
 {
     // 이번에 구하고자 하는 힘들
-    vec4 PressureForce = vec4(0.0, 0.0, 0.0, 0.0);
-    vec4 ViscosityForce = vec4(0.0, 0.0, 0.0, 0.0);
+    vec3 PressureForce = vec3(0.0, 0.0, 0.0);
+    vec3 ViscosityForce = vec3(0.0, 0.0, 0.0);
     float SurfaceForceMag = 0;
 
 
        
-    // 좌 검색
-    for(uint otherId = idx - 1; otherId >= 0; otherId--)
+    // range 범위를 조사, far->near
+    for(uint id = outputData[idx].range.x; id <= outputData[idx].range.y; id++)
     {
-        if(outputData[otherId].ToCamera < outputData[idx].ToCamera - h)
-            break;
-
-
         // 논문의 내용을 그대로 적용 => 상대->나, 방향의 벡터를 사용한다
-        vec4 relativePos = outputData[idx].Position - outputData[otherId].Position;
+        vec3 relativePos = outputData[idx].position.xyz - outputData[id].position.xyz;
         float rSquare = dot(relativePos, relativePos);
 
         // 영향력 있는 거리 안이다
         if(rSquare < hSquare)
         {
             float rLength = length(relativePos);
-            vec4 unitRelativePos = normalize(relativePos);
+            vec3 unitRelativePos = normalize(relativePos);
 
             /*
                 압력에 의한 힘 계산
                 => 서로를 밀어내는 힘
                 따라서 상대에 의해서, 상대로부터 멀어져야 한다
             */
-            //PressureForce += (-1) * particleMass * (outputData[idx].pressure + outputData[otherId].pressure) / (2 * outputData[otherId].density) * Grad_W_Spiky(rLength) * unitRelativePos;
+            PressureForce += (-1) * particleMass * (outputData[idx].pressure + outputData[id].pressure) / (2 * outputData[id].density) * Grad_W_Spiky(rLength) * unitRelativePos;
 
             /* 
                 점성에 의한 힘 계산
@@ -207,78 +188,36 @@ vec4 Get_Fluid_Force(uint idx)
                 내 particle 이 상대 particle 방향으로 이동해야 한다
                 현재 입자에서 상대 입자의 속도 방향과 같은 방향을 가진다
             */
-            ViscosityForce += viscosity * particleMass * (outputData[otherId].Velocity - outputData[idx].Velocity) / outputData[otherId].density * Laplace_W_Viscosity(rLength);
+            ViscosityForce += viscosity * particleMass * (outputData[id].velocity - outputData[idx].velocity).xyz / outputData[id].density * Laplace_W_Viscosity(rLength);
 
             /* 
                 표면 장력 => 방향은 이미 구한 surf normal 방향
                 그 크기를 구해야 한다
+
+                표면에 대해서만 계산한다
             */
-            //SurfaceForceMag += particleMass / outputData[otherId].density * Laplace_W_Poly6(rSquare);
+            if(outputData[idx].isSurf != 0.0f)
+                SurfaceForceMag += particleMass / outputData[id].density * Laplace_W_Poly6(rSquare);
         }
     }
 
 
-    // 동일한 논리로 우측을 조사한다
-    for(uint otherId = idx + 1; otherId < particleCount; otherId++)
-    {
-        if(outputData[otherId].ToCamera > outputData[idx].ToCamera + h)
-            break;
-
-        // 논문의 내용을 그대로 적용 => 상대->나, 방향의 벡터를 사용한다
-        vec4 relativePos = outputData[idx].Position - outputData[otherId].Position;
-        float rSquare = dot(relativePos.xyz, relativePos.xyz);
-
-        // 영향력 있는 거리 안이다
-        if(rSquare < hSquare)
-        {
-            float rLength = length(relativePos.xyz);
-            vec4 unitRelativePos = normalize(relativePos);
-
-            /*
-                압력에 의한 힘 계산
-                => 서로를 밀어내는 힘
-                따라서 상대에 의해서, 상대로부터 멀어져야 한다
-            */
-            //PressureForce += (-1) * particleMass * (outputData[idx].pressure + outputData[otherId].pressure) / (2 * outputData[otherId].density) * Grad_W_Spiky(rLength) * unitRelativePos;
-
-            /* 
-                점성에 의한 힘 계산
-                서로를 당기는 힘
-                내 particle 이 상대 particle 방향으로 이동해야 한다
-                현재 입자에서 상대 입자의 속도 방향과 같은 방향을 가진다
-            */
-            ViscosityForce += viscosity * particleMass * (outputData[otherId].Velocity - outputData[idx].Velocity) / outputData[otherId].density * Laplace_W_Viscosity(rLength);
-
-            /* 
-                표면 장력 => 방향은 이미 구한 surf normal 방향
-                그 크기를 구해야 한다
-            */
-            //SurfaceForceMag += particleMass / outputData[otherId].density * Laplace_W_Poly6(rSquare);
-        }
-    }
+    // 표면장력
+    vec3 SurfaceForce = ( outputData[idx].isSurf == 0.0f ) ? vec3(0.0, 0.0, 0.0)
+                                                           : (-1) * surfCoeffi * SurfaceForceMag * normalize(outputData[idx].surfNormal);
 
 
-    // 표면이 아니다 == surf normal 이 0 벡터다 == 표면장력이 0 이다
-    // vec4 SurfaceForce = ( length(outputData[idx].surfNormal) == 0 ) ? vec4(0.0, 0.0, 0.0, 0.0)
-    //                     : (-1) * surfCoeffi * SurfaceForceMag * normalize(outputData[idx].surfNormal);
 
-
-    //PressureForce *= pressureRatio;
-    // ViscosityForce *= viscosityRatio;
-    // SurfaceForce *= surfaceRatio;
-
-    // 모든 힘을 리턴한다
-    //return PressureForce + ViscosityForce + SurfaceForce;
-    //return PressureForce;
-    return ViscosityForce;
+    // 모든 힘을 저장한다
+    outputData[idx].force = PressureForce + ViscosityForce + SurfaceForce;
 }
 
 
 
 // 2. 주변 particle 에 관계없이 계산되는 힘
-vec4 Get_Extra_Force(uint idx)
+void Get_Extra_Force(uint idx)
 {
-    vec4 ExtraForce = vec4(0, 0, 0, 0);
+    vec3 ExtraForce = vec3(0, 0, 0);
     float curDensity = outputData[idx].density;
 
     // 중력에 의한 힘
@@ -287,7 +226,8 @@ vec4 Get_Extra_Force(uint idx)
 
 
 
-    return ExtraForce;
+    // 추가적인 힘을 더해 저장
+    outputData[idx].force += ExtraForce;
 }
 
 
@@ -299,12 +239,9 @@ void main()
     // 0. surf normal 을 먼저 구한다
     Update_SurfNormal(Index);
 
-    // 알짜힘 초기화
-    outputData[Index].force = vec4(0.0, 0.0, 0.0, 0.0);
-
     // 1. 영향을 받는 힘을 구하고
-    outputData[Index].force += Get_Fluid_Force(Index);
+    //Get_Fluid_Force(Index);
 
     // 2. 영향을 안 받는 힘을 구한다
-    outputData[Index].force += Get_Extra_Force(Index);
+    //Get_Extra_Force(Index);
 }
