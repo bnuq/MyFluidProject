@@ -3,20 +3,40 @@
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 
+/*
+    position                    new position
+
+    velocity                    new velocity
+
+    range                       
+    density                     
+    pressure                    
+
+    force                   
+
+    toCamera                    new toCamera
+                                    position 이 바뀌었으니까
+                                    새로 구해줘야지
+ */
+
 struct Particle
 {
-    vec4 Position;
-    vec4 Velocity;
-    vec4 force;
-    vec4 surfNormal;
+    vec4 position;
+
+    vec4 velocity;
+
+    uvec2 range;
     float density;
     float pressure;
-    float ToCamera;
-    float padding;
+
+    vec3 force;
+    float toCamera;
 };
-layout(std430, binding = 2) buffer OutputBuffer
+
+
+layout(std430, binding = 1) buffer ParticleBuffer
 {
-    Particle outputData[];
+    Particle pData[];
 };
 
 
@@ -43,71 +63,51 @@ uniform vec3 CameraPos;
         Get_Camera_Distance(index)
  */
 
-void Make_Move(uint idx)
-{
-    Particle curParticle = outputData[idx];
-        // 속도 구하고
-        curParticle.Velocity.xyz += deltaTime * (curParticle.force.xyz / curParticle.density);
-        // 위치 구하고
-        curParticle.Position.xyz += deltaTime * curParticle.Velocity.xyz;
-    
-    outputData[idx] = curParticle;
-}
-
-void Check_Range(uint idx)
-{
-    Particle curParticle = outputData[idx];
-
-        // 파티클이 경계를 벗어난 경우, 다시 돌아가야 하는 내부를 향하는 노멀벡터
-        vec3 norVec = vec3(0, 0, 0);
-        // 파티클이 경계를 벗어난 경우, 벗어난 거리
-        float overLength = 0;
-
-        // 경계를 벗어난 경우를 찾고, 그에 맞게 돌아가야 하는 방향을 찾는다
-        if     (curParticle.Position.x < -LimitRange.x)       norVec.x += -LimitRange.x - curParticle.Position.x;
-        else if(curParticle.Position.x > +LimitRange.x)       norVec.x += +LimitRange.x - curParticle.Position.x;
-        
-        if     (curParticle.Position.y < -LimitRange.y)       norVec.y += -LimitRange.y - curParticle.Position.y;
-        else if(curParticle.Position.y > +LimitRange.y)       norVec.y += +LimitRange.y - curParticle.Position.y;
-
-        if     (curParticle.Position.z < -LimitRange.z)       norVec.z += -LimitRange.z - curParticle.Position.z;
-        else if(curParticle.Position.z > +LimitRange.z)       norVec.z += +LimitRange.z - curParticle.Position.z;
-
-        // 돌아가는 벡터가 0인 경우 == 파티클이 경계를 벗어나지 않았다 == 할 게 없다
-        if(length(norVec) == 0) return;
-        // 아니라면, 정해진 방향을 향하도록 속도를 바꾸고, 위치도 옮겨버린다
-        else
-        {
-            //curParticle.Velocity.xyz = normalize(norVec) * damping * 0.001;
-            curParticle.Velocity.xyz = vec3(0, 0, 0);
-            curParticle.Position.xyz += (1.00001) * norVec;
-
-            outputData[idx] = curParticle;
-        }
-
-}
 
 
 // 지금까지 사용해왔던, output data 에 저장된 ToCamera 값 대신 새로운 값을 갱신
 void Get_Camera_Distance(uint idx)
 {
-    Particle curParticle = outputData[idx];
-        curParticle.ToCamera = distance(CameraPos, curParticle.Position.xyz);
+    Particle curParticle = pData[idx];
+        
 
-    outputData[idx] = curParticle;
+    pData[idx] = curParticle;
 }
 
 void main()
 {
     // 동일하게 하나의 그룹은 x 축 방향만 가지고 있고, x 축 방향 그룹만 존재한다고 생각
-    uint Index = gl_GlobalInvocationID.x;
+    uint index = gl_GlobalInvocationID.x;
 
-    // 1. 먼저 현재 조건 => 속도 구하고 => 이동한다
-    Make_Move(Index);
 
-    // 2. 정해진 경계를 벗어나는 지 확인한다
-    Check_Range(Index);
+    // velocity update
+    pData[index].velocity.xyz += deltaTime * (pData[index].force.xyz / pData[index].density);
+    // position update
+    pData[index].position.xyz += deltaTime * pData[index].velocity.xyz;
 
-    // 3. 파티클에서 카메라까지 거리를 구하낟
-    Get_Camera_Distance(Index);
+    
+    // 경계 체크
+    // 경계를 벗어난 파티클 => 돌아가야 하는 경계를 가리키는 벡터
+    vec3 OverVec = vec3(0, 0, 0);
+
+    // 경계를 벗어난 경우를 찾고, 그에 맞게 돌아가야 하는 방향을 찾는다
+    if     (pData[index].position.x < -LimitRange.x)       OverVec.x += -LimitRange.x - pData[index].position.x;
+    else if(pData[index].position.x > +LimitRange.x)       OverVec.x += +LimitRange.x - pData[index].position.x;
+    
+    if     (pData[index].position.y < -LimitRange.y)       OverVec.y += -LimitRange.y - pData[index].position.y;
+    else if(pData[index].position.y > +LimitRange.y)       OverVec.y += +LimitRange.y - pData[index].position.y;
+
+    if     (pData[index].position.z < -LimitRange.z)       OverVec.z += -LimitRange.z - pData[index].position.z;
+    else if(pData[index].position.z > +LimitRange.z)       OverVec.z += +LimitRange.z - pData[index].position.z;
+
+    // 들어오는 벡터가 0 이 아닌 경우 => 벗어남이 존재한다
+    if(length(OverVec) != 0)
+    {
+        pData[index].velocity.xyz = normalize(OverVec) * damping;   // 속도를 강제로 들어오는 방향으로 설정
+        pData[index].position.xyz += (1.00001) * OverVec;;           // 위치를 강제로 영역 내부로 넣어버린다
+    }
+
+
+    // 최종 위치를 이용해서, 파티클에서 카메라까지 거리를 구한다
+    pData[index].toCamera = distance(CameraPos, pData[index].position.xyz);
 }

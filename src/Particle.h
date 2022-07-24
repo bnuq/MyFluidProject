@@ -20,13 +20,13 @@ public:
     float density        = 0.0f;
     float pressure       = 0.0f;
 
-    glm::vec3 surfNormal = glm::vec3(0.0f, 0.0f, 0.0f);  // particle surface normal
-    float isSurf         = 0.0f;                         // 0.0f == not surface
+    // glm::vec3 surfNormal = glm::vec3(0.0f, 0.0f, 0.0f);  // particle surface normal
+    // float isSurf         = 0.0f;                         // 0.0f == not surface
 
     glm::vec3 force     = glm::vec3(0.0f, 0.0f, 0.0f);   // net force
     float toCamera      = 0.0f;
     
-    
+
 
 
     // Fluid 가 담기는 영역

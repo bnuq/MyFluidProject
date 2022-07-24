@@ -116,58 +116,53 @@ private:
         한쪽에서 읽고, 다른 쪽으로 출력해
         이후 두 버퍼를 스왑, Compute Program 에 입력과 출력이 번갈아서 연결되도록 한다
      */
-    BufferPtr InputBuffer;
-    BufferPtr OutputBuffer;
+    BufferPtr ParticleBuffer;
+    BufferPtr CountBuffer;
 
-    BufferPtr testBuffer;
 
-    unsigned int Input_Index  = 1;
-    unsigned int Output_Index = 2;
+    unsigned int Particle_Index  = 1;
+    unsigned int Count_Index = 5;
+
 
 
     // 각 프로그램에서 필요로 하는 Uniform Variables
         // 1. Smooth Kernel
-        float SmoothKernelRadius = 1.0f;
+        float SmoothKernelRadius = 0.8f;
+        //float SmoothKernelRadius = 10.0f;
         
         // 2. Gas
         struct Gas
         {
-            float gasCoeffi   = 0.01f;
-            float restDensity = 1200.0f;
+            float gasCoeffi   = 0.001f;
+            //float restDensity = 1200.0f;
+            float restDensity = 50.0f;
         };
         Gas gas;
 
+        // 3. Viscosity
+        float viscosity     = 1.0f;
 
+        // 4. Gravity
+        glm::vec3 gravityAcel = glm::vec3(0.0f, -10.0f, 0.0f);
 
-    struct ForVar
-    {
-        float viscosity     = 0.001f;
-        float surfCoeffi    = 1.0f;
-        float surfForceThreshold = 0.01f;
-
-        glm::vec4 gravityAcel = glm::vec4(0.0f, -1.0f, 0.0f, 0.0f);
-    };
-    
-    struct MovVar
-    {
+        // 5. Delta Time
         float deltaTime = 0.008f;
-        float damping   = 0.5f;
-    };
-    ForVar forvar;
-    MovVar movvar;
+
+        // 6. Damping
+        float damping   = 0.2f;
 
 
 
+    // Program 실행 함수
+    void Get_Density_Pressure();
+    void Get_Force();
+    void Get_Move();
 
-    
-
-    
 
 
+    // Program 실행 그룹 개수
+    unsigned int GroupNum = 2;
 
-    float pressureRatio = 1.0f;
-    float viscosityRatio = 1.0f;
-    float surfaceRatio = 1.0f;
 };
 
 #endif // __CONTEXT_H__

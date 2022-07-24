@@ -3,7 +3,7 @@
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 
-// 넘겨받는 Uniform Variables{}
+// Uniform Variables
 // 0
 // Smooth Kernel 관련 정보
     uniform float h;
@@ -17,9 +17,6 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
     // 점성에 의한 힘
     uniform float viscosity;
 
-    // 표면 장력의 정도
-    uniform float surfCoeffi;
-    uniform float surfForceThreshold;
 
 // 2 => Extra Force
     uniform vec3 gravityAcel;
@@ -65,14 +62,25 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 
 
-/* 
-    Output Data 에서,
-    position, velocity, density, pressure 는 계산이 완료된 상태
+/*
+    여전히 정렬된 배열 ParticleBuffer
+        파티클 ~ 카메라 거리, toCamera 값으로 정렬
+        Far -> Near 순서로 정렬
 
-    force, surfNormal 을 구해서 넣어주어야 한다
+    position;                   position
 
-    input data 가 그대로 output 으로 들어왔기 때문에, particles 는 여전히 정렬된 상태다
+    velocity;                   velocity
+
+    range                       range
+    density                     density
+    pressure                    pressure
+
+    -               =>          force               , = pressure force + viscosity force (Update_Fluid_Force)
+                                                      + extra force                      (Update_Extra_Force)
+
+    toCamera;                   toCamera
  */
+
 struct Particle
 {
     vec4 position;
@@ -83,94 +91,36 @@ struct Particle
     float density;
     float pressure;
 
-    vec3 surfNormal;    // 0.
-    float isSurf;       // 0.
-
-    vec3 force;         // 1, 2s
+    vec3 force;
     float toCamera;
 };
-layout(std430, binding = 2) buffer OutputBuffer
+
+
+layout(std430, binding = 1) buffer ParticleBuffer
 {
-    Particle outputData[];
+    Particle pData[];
 };
 
-layout(std430, binding = 5) buffer TestBuffer
-{
-    uint count;
-};
-
-
-
-/* 
-    force(알짜힘) + surfNormal 구하기
-        0. 가장 먼저 surfNormal 을 구한다
-
-        1. 주변 particles 의 값을 통해 구하는 값
-            압력에 의한 힘
-            점성에 의한 힘
-            표면장력
-
-        2. 주변과 관계없이 구할 수 있는 값
-            wave
-            중력
-            클릭
- */
-
-
-// surf normal, isSurf 계산
-void Update_SurfNormal(uint idx)
-{
-    vec3 newSurfNormal = vec3(0.0, 0.0, 0.0);
-
-    // range 범위를 조사, far->near
-    for(uint id = outputData[idx].range.x; id <= outputData[idx].range.y; id++)
-    {
-        // 두 파티클 사이의 거리를 구한다
-        vec3 relativePos = outputData[idx].position.xyz - outputData[id].position.xyz;
-        float rSquare = dot(relativePos, relativePos);
-
-        // 영향력 있는 거리 안이다
-        if(rSquare < hSquare)
-            newSurfNormal += particleMass / outputData[id].density * Grad_W_Poly6(rSquare) * relativePos;
-            //newSurfNormal += vec3(1, 0, 0);
-    }
-
-
-    // 연산결과가 threshold 보다 크다 == It is Surface => 카운트 세고, particle 정보에 저장
-    if(length(newSurfNormal) > surfForceThreshold)
-    {
-        atomicAdd(count, 1);
-        outputData[idx].isSurf = 1.0f;
-    }
-    // 표면이 아니면, surface 가 아님을 기록
-    else
-        outputData[idx].isSurf = 0.0f;
-
-
-    // surface normal 저장
-    outputData[idx].surfNormal = newSurfNormal;
-}
 
 
 // force => 주변에 영향을 받는 힘을 구한다
-void Get_Fluid_Force(uint idx)
+void Update_Fluid_Force(uint myId)
 {
     // 이번에 구하고자 하는 힘들
     vec3 PressureForce = vec3(0.0, 0.0, 0.0);
     vec3 ViscosityForce = vec3(0.0, 0.0, 0.0);
-    float SurfaceForceMag = 0;
 
 
        
     // range 범위를 조사, far->near
-    for(uint id = outputData[idx].range.x; id <= outputData[idx].range.y; id++)
+    for(uint neId = pData[myId].range.x; neId <= pData[myId].range.y; neId++)
     {
         // 논문의 내용을 그대로 적용 => 상대->나, 방향의 벡터를 사용한다
-        vec3 relativePos = outputData[idx].position.xyz - outputData[id].position.xyz;
+        vec3 relativePos = pData[myId].position.xyz - pData[neId].position.xyz;
         float rSquare = dot(relativePos, relativePos);
 
-        // 영향력 있는 거리 안이다
-        if(rSquare < hSquare)
+        // 영향력 있는 거리 안이다 + 자기 자신에 대한 연산은 제외한다 => normalize 에서 에러 발생
+        if(rSquare != 0 && rSquare < hSquare)
         {
             float rLength = length(relativePos);
             vec3 unitRelativePos = normalize(relativePos);
@@ -180,7 +130,7 @@ void Get_Fluid_Force(uint idx)
                 => 서로를 밀어내는 힘
                 따라서 상대에 의해서, 상대로부터 멀어져야 한다
             */
-            PressureForce += (-1) * particleMass * (outputData[idx].pressure + outputData[id].pressure) / (2 * outputData[id].density) * Grad_W_Spiky(rLength) * unitRelativePos;
+            PressureForce += (-1) * particleMass * (pData[myId].pressure + pData[neId].pressure) / (2 * pData[neId].density) * Grad_W_Spiky(rLength) * unitRelativePos;
 
             /* 
                 점성에 의한 힘 계산
@@ -188,37 +138,21 @@ void Get_Fluid_Force(uint idx)
                 내 particle 이 상대 particle 방향으로 이동해야 한다
                 현재 입자에서 상대 입자의 속도 방향과 같은 방향을 가진다
             */
-            ViscosityForce += viscosity * particleMass * (outputData[id].velocity - outputData[idx].velocity).xyz / outputData[id].density * Laplace_W_Viscosity(rLength);
-
-            /* 
-                표면 장력 => 방향은 이미 구한 surf normal 방향
-                그 크기를 구해야 한다
-
-                표면에 대해서만 계산한다
-            */
-            if(outputData[idx].isSurf != 0.0f)
-                SurfaceForceMag += particleMass / outputData[id].density * Laplace_W_Poly6(rSquare);
+            ViscosityForce += viscosity * particleMass * (pData[neId].velocity.xyz - pData[myId].velocity.xyz) / pData[neId].density * Laplace_W_Viscosity(rLength);
         }
     }
 
-
-    // 표면장력
-    vec3 SurfaceForce = ( outputData[idx].isSurf == 0.0f ) ? vec3(0.0, 0.0, 0.0)
-                                                           : (-1) * surfCoeffi * SurfaceForceMag * normalize(outputData[idx].surfNormal);
-
-
-
     // 모든 힘을 저장한다
-    outputData[idx].force = PressureForce + ViscosityForce + SurfaceForce;
+    pData[myId].force += (PressureForce + ViscosityForce);
 }
 
 
 
 // 2. 주변 particle 에 관계없이 계산되는 힘
-void Get_Extra_Force(uint idx)
+void Update_Extra_Force(uint myId)
 {
     vec3 ExtraForce = vec3(0, 0, 0);
-    float curDensity = outputData[idx].density;
+    float curDensity = pData[myId].density;
 
     // 중력에 의한 힘
     // 나비에 스톡스 방정식에 의해 ~ 밀도 사용 // 나도 2000 정도 곱해줘야 하나??
@@ -227,21 +161,21 @@ void Get_Extra_Force(uint idx)
 
 
     // 추가적인 힘을 더해 저장
-    outputData[idx].force += ExtraForce;
+    pData[myId].force += ExtraForce;
 }
 
 
 void main()
 {
     // ssbo 에 접근하는 스레드의 인덱스
-    uint Index = gl_GlobalInvocationID.x;
+    uint index = gl_GlobalInvocationID.x;
 
-    // 0. surf normal 을 먼저 구한다
-    Update_SurfNormal(Index);
+    // force 초기화
+    pData[index].force = vec3(0.0, 0.0, 0.0);
 
     // 1. 영향을 받는 힘을 구하고
-    //Get_Fluid_Force(Index);
+    Update_Fluid_Force(index);
 
     // 2. 영향을 안 받는 힘을 구한다
-    //Get_Extra_Force(Index);
+    Update_Extra_Force(index);
 }
