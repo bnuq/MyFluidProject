@@ -447,30 +447,9 @@ void Context::Render()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    //SPDLOG_INFO("First surfNormal is {}, {}, {}", ParticleArray[0].surfNormal.x, ParticleArray[0].surfNormal.y, ParticleArray[0].surfNormal.z);
-    //SPDLOG_INFO("First Force is {}, {}, {}", ParticleArray[0].force.x, ParticleArray[0].force.y, ParticleArray[0].force.z);
+
+    Draw_Particles(projection, view);
     
-
-    // output 버퍼에 저장된 데이터를 이용해서, Particles 를 그린다
-    DrawProgram->Use();
-  
-            // 정렬한 데이터를 이용해서, 카메라에서 가까운 것 부터 렌더링을 진행
-            for(unsigned int i = 0; i < Particle::TotalParticleCount; i++)
-            {
-                auto ParticlePos = glm::vec3(ParticleArray[i].position.x, ParticleArray[i].position.y, ParticleArray[i].position.z);
-
-                auto modelTransform = glm::translate(glm::mat4(1.0f), ParticlePos);
-                auto transform = projection * view * modelTransform;
-
-                DrawProgram->SetUniform("transform", transform);
-                DrawProgram->SetUniform("ViewVec", glm::normalize(MainCam->Position - ParticlePos));
-
-
-                BoxMesh->Draw(DrawProgram.get());
-
-            }
-
-    glUseProgram(0);
 
     glDisable(GL_BLEND);
 }
@@ -547,6 +526,31 @@ void Context::Get_Move()
             // 다시 넣어준다
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);       
+
+    glUseProgram(0);
+}
+
+
+void Context::Draw_Particles(const glm::mat4& projection, const glm::mat4& view)
+{
+    // output 버퍼에 저장된 데이터를 이용해서, Particles 를 그린다
+    DrawProgram->Use();
+  
+            // 정렬한 데이터를 이용해서, 카메라에서 가까운 것 부터 렌더링을 진행
+            for(unsigned int i = 0; i < Particle::TotalParticleCount; i++)
+            {
+                auto ParticlePos = glm::vec3(ParticleArray[i].position.x, ParticleArray[i].position.y, ParticleArray[i].position.z);
+
+                auto modelTransform = glm::translate(glm::mat4(1.0f), ParticlePos);
+                auto transform = projection * view * modelTransform;
+
+                DrawProgram->SetUniform("transform", transform);
+                DrawProgram->SetUniform("ViewVec", glm::normalize(MainCam->Position - ParticlePos));
+
+
+                BoxMesh->Draw(DrawProgram.get());
+
+            }
 
     glUseProgram(0);
 }

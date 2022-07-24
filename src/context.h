@@ -157,6 +157,7 @@ private:
     void Get_Density_Pressure();
     void Get_Force();
     void Get_Move();
+    void Draw_Particles(const glm::mat4& proj, const glm::mat4& view);
 
 
 

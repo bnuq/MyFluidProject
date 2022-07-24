@@ -4,6 +4,23 @@
 #include "common.h"
 
 
+// CPU -> GPU 사이로 주고 받는 데이터 형식, 꼭 필요한 것만 넣었다
+class Particle_Core
+{
+    public:
+    glm::vec4 position      = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    glm::vec4 velocity      = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+
+    float toCamera          = 0.0f;
+
+    float padding1;
+    float padding2;
+    float padding3;
+};
+
+
+
+
 class Particle
 {
 public:
