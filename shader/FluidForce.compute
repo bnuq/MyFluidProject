@@ -17,6 +17,10 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
     // 점성에 의한 힘
     uniform float viscosity;
 
+    // 표면 장력 관련
+    uniform float threshold;
+    uniform float surfCoeffi;
+
 
 // 2 => Extra Force
     uniform vec3 gravityAcel;
@@ -75,7 +79,11 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
     density                     density
     pressure                    pressure
 
+    -                           surfNormal
+    -                           surfForceMag
+
     -               =>          force               , = pressure force + viscosity force (Update_Fluid_Force)
+    + Surface Force => 표면이라는 게 확정이 되면
                                                       + extra force                      (Update_Extra_Force)
 
     toCamera;                   toCamera
@@ -91,6 +99,9 @@ struct Particle
     float density;
     float pressure;
 
+    vec3 surfNormal;
+    float surfForceMag;
+
     vec3 force;
     float toCamera;
 };
@@ -105,9 +116,15 @@ layout(std430, binding = 2) buffer ParticleBuffer
 // force => 주변에 영향을 받는 힘을 구한다
 void Update_Fluid_Force(uint myId)
 {
+    // force 초기화
+    pData[myId].force = vec3(0.0, 0.0, 0.0);
+
+
     // 이번에 구하고자 하는 힘들
-    vec3 PressureForce = vec3(0.0, 0.0, 0.0);
-    vec3 ViscosityForce = vec3(0.0, 0.0, 0.0);
+    vec3 PressureForce    = vec3(0.0, 0.0, 0.0);
+    vec3 ViscosityForce   = vec3(0.0, 0.0, 0.0);
+    vec3 SurfaceNormal    = vec3(0.0, 0.0, 0.0);
+    float SurfaceForceMag = 0.0;
 
 
        
@@ -138,17 +155,43 @@ void Update_Fluid_Force(uint myId)
                 현재 입자에서 상대 입자의 속도 방향과 같은 방향을 가진다
             */
             ViscosityForce += viscosity * particleMass * (pData[neId].velocity.xyz - pData[myId].velocity.xyz) / pData[neId].density * Laplace_W_Viscosity(rLength);
+
+            /* 
+                Surf Normal
+                입자의 바깥-> 유체 내부로 들어가는 벡터
+                유체 내부를 향하는 surface normal
+             */
+            SurfaceNormal += particleMass / pData[neId].density * Grad_W_Poly6(rSquare) * relativePos;
+
+            /* 
+                Surface Force Magnitude
+                입자에 작용하는 표면 장력의 크기
+                표면 장력이 존재한다면, 이 크기를 가진다
+                방향은 surface normal 과 같다
+             */
+            SurfaceForceMag += particleMass / pData[neId].density * Laplace_W_Poly6(rSquare);
         }
     }
 
+
+
     // 모든 힘을 저장한다
-    pData[myId].force += (PressureForce + ViscosityForce);
-}
+    pData[myId].force = (PressureForce + ViscosityForce);
+    // surface normal 저장
+    pData[myId].surfNormal = SurfaceNormal;
+    // surface force mag
+    pData[myId].surfForceMag = SurfaceForceMag;
+
+
+    // surface normal 이 일정 크기 이상이면, 표면 장력을 더한다
+    if( length(SurfaceNormal) > threshold )
+        pData[myId].force += (-1) * surfCoeffi * SurfaceForceMag * normalize(SurfaceNormal);
+}   
 
 
 
 // 2. 주변 particle 에 관계없이 계산되는 힘
-void Update_Extra_Force(uint myId)
+void Add_Extra_Force(uint myId)
 {
     vec3 ExtraForce = vec3(0, 0, 0);
     float curDensity = pData[myId].density;
@@ -169,12 +212,9 @@ void main()
     // ssbo 에 접근하는 스레드의 인덱스
     uint index = gl_GlobalInvocationID.x;
 
-    // force 초기화
-    pData[index].force = vec3(0.0, 0.0, 0.0);
-
     // 1. 영향을 받는 힘을 구하고
     Update_Fluid_Force(index);
 
     // 2. 영향을 안 받는 힘을 구한다
-    Update_Extra_Force(index);
+    Add_Extra_Force(index);
 }

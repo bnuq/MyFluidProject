@@ -146,6 +146,10 @@ private:
         // 3. Viscosity
         float viscosity     = 1.0f;
 
+        // 3.5 Surface
+        float threshold     = 0.8f;
+        float surfCoeffi    = 0.1f;
+
         // 4. Gravity
         glm::vec3 gravityAcel = glm::vec3(0.0f, -10.0f, 0.0f);
 

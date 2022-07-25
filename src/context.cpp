@@ -102,6 +102,8 @@ bool Context::Init()
         glShaderStorageBlockBinding(MoveCompute->Get(), blockIndex, Particle_Index);
         blockIndex = glGetProgramResourceIndex(MoveCompute->Get(), GL_SHADER_STORAGE_BUFFER, "CoreParticleBuffer");
         glShaderStorageBlockBinding(MoveCompute->Get(), blockIndex, CoreParticle_Index);
+        blockIndex = glGetProgramResourceIndex(MoveCompute->Get(), GL_SHADER_STORAGE_BUFFER, "CountBuffer");
+        glShaderStorageBlockBinding(MoveCompute->Get(), blockIndex, Count_Index);
 
 
 
@@ -166,6 +168,9 @@ bool Context::Init()
             // 1
             ForceCompute->SetUniform("viscosity", viscosity);
 
+            ForceCompute->SetUniform("threshold", threshold);
+            ForceCompute->SetUniform("surfCoeffi", surfCoeffi);
+
             // 2
             ForceCompute->SetUniform("gravityAcel", gravityAcel);
 
@@ -184,6 +189,10 @@ bool Context::Init()
                 for(unsigned int i = 0; i < Particle::TotalParticleCount; i++)
                 {
                     SPDLOG_INFO("{} th force {}, {}, {}", i, ParticleArray[i].force.x, ParticleArray[i].force.y, ParticleArray[i].force.z);
+
+                    SPDLOG_INFO("{} th surfNormal {}, {}, {}", i, ParticleArray[i].surfNormal.x, ParticleArray[i].surfNormal.y, ParticleArray[i].surfNormal.z);
+
+                    SPDLOG_INFO("{} th surf force mag {}", i, ParticleArray[i].surfForceMag);
 
                     SPDLOG_INFO("--- --- --- ---");
                 }
@@ -323,6 +332,7 @@ void Context::Render()
         ImGui::DragFloat("deltaTime", &deltaTime);
         ImGui::DragFloat("damping", &damping);
 
+        ImGui::DragFloat("threshold", &threshold, 0.001f, 0.001f);
     }
     ImGui::End();
 
@@ -513,6 +523,9 @@ void Context::Get_Force()
         // 1
         ForceCompute->SetUniform("viscosity", viscosity);
 
+        ForceCompute->SetUniform("threshold", threshold);
+        ForceCompute->SetUniform("surfCoeffi", surfCoeffi);
+
         // 2
         ForceCompute->SetUniform("gravityAcel", gravityAcel);
 
@@ -530,6 +543,8 @@ void Context::Get_Move()
         MoveCompute->SetUniform("deltaTime", deltaTime);
         MoveCompute->SetUniform("LimitRange", Particle::FluidRange);
         MoveCompute->SetUniform("damping", damping);
+
+        MoveCompute->SetUniform("threshold", threshold);
         
         // 현재 카메라의 위치를 Uniform 으로 설정
         // Particle 이 최종적으로 움직인 위치에서 카메라까지의 거리를 구해야 한다
@@ -549,6 +564,18 @@ void Context::Get_Move()
 
             // 다시 넣어준다
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+
+        // surface particles 개수를 읽는다
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, CountBuffer->Get());
+            unsigned int temp{};
+            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &temp);
+
+            SPDLOG_INFO("Surface count is {}", temp);
+
+            temp = 0;
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &temp);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
     glUseProgram(0);

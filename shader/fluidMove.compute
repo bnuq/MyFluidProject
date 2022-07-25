@@ -14,11 +14,16 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
     density                     
     pressure                    
 
+    surfNormal
+    surfForceMag
+
     force                   
 
     toCamera                    new toCamera
                                     position 이 바뀌었으니까
                                     새로 구해줘야지
+
+                                new isSurf
  */
 struct CoreParticle
 {
@@ -31,6 +36,8 @@ struct CoreParticle
     float zvel;
 
     float toCamera;
+
+    float isSurf;
 };
 
 layout(std430, binding = 1) buffer CoreParticleBuffer
@@ -49,6 +56,9 @@ struct Particle
     float density;
     float pressure;
 
+    vec3 surfNormal;
+    float surfForceMag;
+
     vec3 force;
     float toCamera;
 };
@@ -58,6 +68,11 @@ layout(std430, binding = 2) buffer ParticleBuffer
     Particle pData[];
 };
 
+
+layout(std430, binding = 5) buffer CountBuffer
+{
+    uint count;
+};
 
 
 
@@ -71,6 +86,8 @@ uniform float damping;
 
 uniform vec3 CameraPos;
 
+
+uniform float threshold;
 
 
 /* 
@@ -134,4 +151,20 @@ void main()
 
     // update toCamera
     cData[index].toCamera = distance(CameraPos, pData[index].position.xyz);
+
+
+
+    /* 
+        pData 에서 surface normal 를 확인 => 일정 크기 이상이면 cData 에 isSurf = 1.0 을 넣어준다
+        
+        그리고 surface 를 발견할 때마다 count 개수를 증가시켜, 총 surface 의 개수를 파악할 수 있게 한다
+    */
+    if( length(pData[index].surfNormal) > threshold )
+    {
+        cData[index].isSurf = 1.0f;
+        atomicAdd(count, 1);
+    }        
+    else
+        cData[index].isSurf = 0.0f;
+
 }

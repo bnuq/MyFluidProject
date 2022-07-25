@@ -39,6 +39,9 @@ float W_Poly6(float r2) { return (315.0 / (64 * PI * pow(abs(h), 9.0) ) ) * pow(
     -                 =>      density         , Update_Density_Pressure
     -                         pressure        , Update_Density_Pressure
 
+                              -
+                              -
+                              
     -
     toCamera                  toCamera
  */
@@ -53,6 +56,8 @@ struct CoreParticle
     float zvel;
 
     float toCamera;
+
+    float isSurf;
 };
 
 layout(std430, binding = 1) buffer CoreParticleBuffer
@@ -70,6 +75,9 @@ struct Particle
     uvec2 range;
     float density;
     float pressure;
+
+    vec3 surfNormal;
+    float surfForceMag;
 
     vec3 force;
     float toCamera;
@@ -102,13 +110,13 @@ void main()
     uint index = gl_GlobalInvocationID.x;
 
     // update position
-        pData[index].position = vec4( cData[index].xpos, cData[index].ypos, cData[index].zpos, 1.0 );
+    pData[index].position = vec4( cData[index].xpos, cData[index].ypos, cData[index].zpos, 1.0 );
 
     // update velocity
-        pData[index].velocity = vec4( cData[index].xvel, cData[index].yvel, cData[index].zvel, 0.0 );
+    pData[index].velocity = vec4( cData[index].xvel, cData[index].yvel, cData[index].zvel, 0.0 );
 
     // update toCamera
-        pData[index].toCamera = cData[index].toCamera;
+    pData[index].toCamera = cData[index].toCamera;
 
 
 
@@ -183,6 +191,6 @@ void main()
 
 
     // Update
-        pData[index].density  = newDensity;
-        pData[index].pressure = newPressure;
+    pData[index].density  = newDensity;
+    pData[index].pressure = newPressure;
 }

@@ -19,6 +19,8 @@ class CoreParticle
     float xpos, ypos, zpos;
     float xvel, yvel, zvel;
     float toCamera;
+    
+    float isSurf;       // 표면 여부를 판단하고 저장
 };
 
 
@@ -27,24 +29,21 @@ class CoreParticle
 class Particle
 {
 public:
-    // Particle() {}
-    // Particle(glm::vec4 pos, glm::vec3 camPos);
-
 
     // std430 Memory Layout => vec4 length
     glm::vec4 position   = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 
     glm::vec4 velocity   = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
 
-    glm::uvec2 range      = glm::uvec2(0, 0);
+    glm::uvec2 range     = glm::uvec2(0, 0);
     float density        = 0.0f;
     float pressure       = 0.0f;
 
-    // glm::vec3 surfNormal = glm::vec3(0.0f, 0.0f, 0.0f);  // particle surface normal
-    // float isSurf         = 0.0f;                         // 0.0f == not surface
+    glm::vec3 surfNormal = glm::vec3(0.0f, 0.0f, 0.0f);  // particle surface normal
+    float surfForceMag   = 0.0f;                         // 표면 장력의 크기
 
-    glm::vec3 force     = glm::vec3(0.0f, 0.0f, 0.0f);   // net force
-    float toCamera      = 0.0f;
+    glm::vec3 force      = glm::vec3(0.0f, 0.0f, 0.0f);   // net force
+    float toCamera       = 0.0f;
     
 
 
