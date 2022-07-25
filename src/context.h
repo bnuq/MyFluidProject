@@ -156,7 +156,7 @@ private:
 
     // 각 프로그램에서 필요로 하는 Uniform Variables
         // 1. Smooth Kernel
-        float SmoothKernelRadius = 1.5f;
+        float SmoothKernelRadius = 1.0f;
         //float SmoothKernelRadius = 10.0f;
         
         // 2. Gas

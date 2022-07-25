@@ -123,18 +123,48 @@ void main()
 
 
 
+
+    // 각 방향별로 영향을 주는 particle 이 있었는 지 확인한다
+    uint plusX = 0, plusZ = 0, plusY = 0;
+    uint minusX = 0, minusZ = 0;
+
+    // visible 에 영향을 주는 범위는 smooth kernel radius 와는 또 다르게 설정하자
+    uint visibleFar     = index;
+    uint visibleNear    = index;
+
+
+
     uint PossibleFar  = index;        // 가능성이 있는 영역의 파티클 중, 카메라에서 가장 멀리 있는 파티클 인덱스
     uint PossibleNear = index;        // 가능성이 있는 영역의 파티클 중, 카메라에서 가장 가까이 있는 파티클 인덱스
     
     // index => 0 검색, Current Particle 보다 멀리 있는 Particles 를 조사한다
     for(uint farId = index; farId >= 0; farId--)
     {
+        // visible check
+        vec3 meToNei = vec3(cData[farId].xpos, cData[farId].ypos, cData[farId].zpos)
+                        - vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos);
+
+        // 이웃 파티클이 어느정도 가까이 있으면, visible 체크에 사용
+        if(length(meToNei) < 2 * h)
+        {
+            if(meToNei.x > 0) plusX  += (+meToNei.x - correction > 0) ? 1 : 0;
+            if(meToNei.x < 0) minusX += (-meToNei.x - correction > 0) ? 1 : 0;
+
+            if(meToNei.z > 0) plusZ  += (+meToNei.z - correction > 0) ? 1 : 0;
+            if(meToNei.z < 0) minusZ += (-meToNei.z - correction > 0) ? 1 : 0;
+
+            if(meToNei.y > 0) plusY  += (+meToNei.y - correction > 0) ? 1 : 0;
+        }
+
+        
+
+        // range check
+        // 검색 범위가 끝나면 종료
         if(farId == 0)
         {
             PossibleFar = 0;
             break;
         }
-
         if(cData[farId].toCamera >= cData[index].toCamera + h)    
             break;
         else
@@ -144,17 +174,63 @@ void main()
 
     // index => particleCount 검색, Current Particle 보다 가까이 있는 Particles 를 조사한다
     if(cData[index].toCamera - h < 0)   // h 가 긴 경우 => 모든 파티클을 조사
+    {
+        for(uint nearId = index; nearId < TotalParticleCount; nearId++)
+        {
+            // visible check
+            vec3 meToNei = vec3(cData[nearId].xpos, cData[nearId].ypos, cData[nearId].zpos)
+                            - vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos);
+
+            // 이웃 파티클이 어느정도 가까이 있으면, visible 체크에 사용
+            if(length(meToNei) < 2 * h)
+            {
+                if(meToNei.x > 0) plusX  += (+meToNei.x - correction > 0) ? 1 : 0;
+                if(meToNei.x < 0) minusX += (-meToNei.x - correction > 0) ? 1 : 0;
+
+                if(meToNei.z > 0) plusZ  += (+meToNei.z - correction > 0) ? 1 : 0;
+                if(meToNei.z < 0) minusZ += (-meToNei.z - correction > 0) ? 1 : 0;
+
+                if(meToNei.y > 0) plusY  += (+meToNei.y - correction > 0) ? 1 : 0;
+            }
+        }
+
         PossibleNear = TotalParticleCount - 1;
+    }
     else
     {
         for(uint nearId = index; nearId < TotalParticleCount; nearId++)
         {
+            // visible check
+            vec3 meToNei = vec3(cData[nearId].xpos, cData[nearId].ypos, cData[nearId].zpos)
+                            - vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos);
+
+            // 이웃 파티클이 어느정도 가까이 있으면, visible 체크에 사용
+            if(length(meToNei) < 2 * h)
+            {
+                if(meToNei.x > 0) plusX  += (+meToNei.x - correction > 0) ? 1 : 0;
+                if(meToNei.x < 0) minusX += (-meToNei.x - correction > 0) ? 1 : 0;
+
+                if(meToNei.z > 0) plusZ  += (+meToNei.z - correction > 0) ? 1 : 0;
+                if(meToNei.z < 0) minusZ += (-meToNei.z - correction > 0) ? 1 : 0;
+
+                if(meToNei.y > 0) plusY  += (+meToNei.y - correction > 0) ? 1 : 0;
+            }
+
+
             if(cData[nearId].toCamera <= cData[index].toCamera - h)
                 break;
             else
                 PossibleNear = nearId;
         }
     }
+
+    // visible 여부 저장
+    // 한 방향이라도 상대 파티클이 없으면 0 이 저장된다
+    // 한 방향이라도 상대 파티클이 없으면 외부이다
+    // 즉 0 이면 외부이다 = 0 이면 visible 하다
+    pData[index].neighbor = (plusX & minusX & plusZ & minusZ & plusY);
+
+
 
 
     /* 
@@ -167,14 +243,10 @@ void main()
 
 
 
+
+
     float newDensity = 0.0;     // 새로운 밀도
     float newPressure = 0.0;    // 새로운 압력
-
-    //uint newNeighbor = 0;       // 새로운 주변 파티클 개수
-
-    // 각 방향별로 영향을 주는 particle 이 있었는 지 확인한다
-    float plusX = 0, plusZ = 0, plusY = 0;
-    float minusX = 0, minusZ = 0;
 
 
     /* 
@@ -205,13 +277,7 @@ void main()
                 //plusX  += dot(vec3(+1, 0, 0), relativePos);
                 //minusX += dot(vec3(-1, 0, 0), relativePos);
                 //plusX  += 1;
-                if(relativePos.x > 0) plusX  += relativePos.x;
-                if(relativePos.x < 0) minusX -= relativePos.x;
-
-                if(relativePos.z > 0) plusZ  += relativePos.z;
-                if(relativePos.z < 0) minusZ -= relativePos.z;
-
-                if(relativePos.y > 0) plusY  += relativePos.y;
+                
             }
         }
     }
@@ -226,22 +292,4 @@ void main()
     
 
 
-    // 위치 값 보정
-    //plusX  = max(plusX - correction, 0);
-    minusX = max(minusX - correction, 0);
-
-    plusZ  = max(plusZ - correction, 0);
-    minusZ = max(minusZ - correction, 0);
-
-    plusY  = max(plusY - correction, 0);
-
-    // visible 여부 저장
-    // 한 방향이라도 상대 파티클이 없으면 0 이 저장된다
-    // 한 방향이라도 상대 파티클이 없으면 외부이다
-    // 즉 0 이면 외부이다 = 0 이면 visible 하다
-    //pData[index].neighbor = (plusX * minusX * plusZ * minusZ * plusY);
-    if(plusX == 0 || minusX == 0 || plusZ == 0 || minusZ == 0 || plusY == 0)
-        pData[index].neighbor = 0;
-    else 
-        pData[index].neighbor = 1;
 }
