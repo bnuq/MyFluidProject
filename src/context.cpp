@@ -336,6 +336,7 @@ void Context::Render()
 
         
         ImGui::DragFloat("neighborLevel", &neighborLevel, 0.001, 0);
+        ImGui::DragFloat("correction", &correction, 0.001, 0);
     }
     ImGui::End();
 
@@ -505,9 +506,25 @@ void Context::Get_Density_Pressure()
         DensityPressureCompute->SetUniform("gasCoeffi", gas.gasCoeffi);
         DensityPressureCompute->SetUniform("gasCoeffi", gas.restDensity);
 
+        DensityPressureCompute->SetUniform("correction", correction);
 
         glDispatchCompute(Particle::GroupNum, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+
+        // output 인 Particle data 를 확인
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, ParticleBuffer->Get());
+                glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
+
+                SPDLOG_INFO("Density Pressure Compute");
+                // 일단 로그로 확인하자
+                for(unsigned int i = 0; i < Particle::TotalParticleCount; i++)
+                {
+                    SPDLOG_INFO("{} th neighbor {}", i, ParticleArray[i].neighbor);
+                    SPDLOG_INFO("*** *** *** ***");
+                }
+
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     glUseProgram(0);
 }
 
@@ -578,7 +595,7 @@ void Context::Get_Move()
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, CountBuffer->Get());
             glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &visibleCount);
 
-            //SPDLOG_INFO("Surface count is {}", visibleCount);
+            SPDLOG_INFO("Surface count is {}", visibleCount);
 
             unsigned int temp = 0;
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &temp);

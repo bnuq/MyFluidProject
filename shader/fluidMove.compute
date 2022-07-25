@@ -155,11 +155,9 @@ void main()
 
 
     /* 
-        pData 에서 neighbor 개수를 neighborLevel 과 비교
-        기준이 되는 값보다 neighbor 가 더 많으면 => 많이 둘러싸였다 => 내부다 => visible = 0
-        neighbor 가 적다 => 어딘가 바깥에 노출된 부분이 존재한다 => 외부다 => visible = 1
+        neighbor 값이 0 이다 == particle 이 없는 방향이 있었다 = 외부다
     */
-    if(pData[index].neighbor < neighborLevel)   // 내부다 == non-visible
+    if(pData[index].neighbor != 0)   // 내부다 == non-visible
         cData[index].visible = 0;
     else                                        // 외부다 == visible
     {

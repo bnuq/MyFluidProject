@@ -156,7 +156,7 @@ private:
 
     // 각 프로그램에서 필요로 하는 Uniform Variables
         // 1. Smooth Kernel
-        float SmoothKernelRadius = 1.6f;
+        float SmoothKernelRadius = 1.5f;
         //float SmoothKernelRadius = 10.0f;
         
         // 2. Gas
@@ -190,6 +190,9 @@ private:
         // int tempNei = 4;
         float neighborLevel = 0.0005f;
         float tempNei = 4;
+
+
+        float correction = 0.1f;
 
 
     // Program 실행 함수

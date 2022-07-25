@@ -13,6 +13,10 @@ uniform float gasCoeffi;
 uniform float restDensity;
 
 
+// visible 정할 때, 보정 값
+uniform float correction;
+
+
 
 #define PI 3.1415
 /* 
@@ -167,7 +171,11 @@ void main()
     float newPressure = 0.0;    // 새로운 압력
 
     //uint newNeighbor = 0;       // 새로운 주변 파티클 개수
-    vec3 neiVec = vec3(0, 0, 0);
+
+    // 각 방향별로 영향을 주는 particle 이 있었는 지 확인한다
+    float plusX = 0, plusZ = 0, plusY = 0;
+    float minusX = 0, minusZ = 0;
+
 
     /* 
         자기 자신이 검색 대상에 포함되어
@@ -181,16 +189,30 @@ void main()
      */
     for(uint neId = pData[index].range.x; neId <= pData[index].range.y; neId++)
     {
-        vec3 relativePos = vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos) - vec3(cData[neId].xpos, cData[neId].ypos, cData[neId].zpos);
+        // 내가 상대 파티클을 바라보는 벡터
+        vec3 relativePos = vec3(cData[neId].xpos, cData[neId].ypos, cData[neId].zpos) - vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos);
         float rSquare = dot(relativePos, relativePos);
 
         // 실제 영향 여부는 직접 체크해야 한다
         if(rSquare < hSquare)
         {
             newDensity += particleMass * W_Poly6(rSquare);
-            //newNeighbor += 1;
+            
+            // 자기 자신에 대해서 계산하는, 0 벡터는 계산에서 제외
             if(neId != index)
-                neiVec += normalize(relativePos);
+            {
+                // 각 방향별로 상대 파티클의 위치의 성분을 확인하고 더한다
+                //plusX  += dot(vec3(+1, 0, 0), relativePos);
+                //minusX += dot(vec3(-1, 0, 0), relativePos);
+                //plusX  += 1;
+                if(relativePos.x > 0) plusX  += relativePos.x;
+                if(relativePos.x < 0) minusX -= relativePos.x;
+
+                if(relativePos.z > 0) plusZ  += relativePos.z;
+                if(relativePos.z < 0) minusZ -= relativePos.z;
+
+                if(relativePos.y > 0) plusY  += relativePos.y;
+            }
         }
     }
 
@@ -202,6 +224,24 @@ void main()
     pData[index].density  = newDensity;
     pData[index].pressure = newPressure;
     
-    //pData[index].neighbor = newNeighbor;
-    pData[index].neighbor = length(neiVec);
+
+
+    // 위치 값 보정
+    //plusX  = max(plusX - correction, 0);
+    minusX = max(minusX - correction, 0);
+
+    plusZ  = max(plusZ - correction, 0);
+    minusZ = max(minusZ - correction, 0);
+
+    plusY  = max(plusY - correction, 0);
+
+    // visible 여부 저장
+    // 한 방향이라도 상대 파티클이 없으면 0 이 저장된다
+    // 한 방향이라도 상대 파티클이 없으면 외부이다
+    // 즉 0 이면 외부이다 = 0 이면 visible 하다
+    //pData[index].neighbor = (plusX * minusX * plusZ * minusZ * plusY);
+    if(plusX == 0 || minusX == 0 || plusZ == 0 || minusZ == 0 || plusY == 0)
+        pData[index].neighbor = 0;
+    else 
+        pData[index].neighbor = 1;
 }
