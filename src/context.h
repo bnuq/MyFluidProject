@@ -102,17 +102,33 @@ private:
     void Init_CoreParticles();
 
     // Particle 들을 카메라 까지의 거리로 정렬하는 function object
-    struct CoreParticleCompare
+    struct CoreParticle_toCamera_Compare
     {
         bool operator()(const CoreParticle& p1, const CoreParticle& p2)
         {
-            // 카메라까지의 거리가 긴 것 => 짧은 것, 순서로 정렬한다
+            // 오로지 파티클 ~ 카메라 사이의 거리를 기준으로 정렬
             return p1.toCamera > p2.toCamera;
+        }
+    };
+
+    // 렌더링하기 전에, surface 유무를 이용해서 정렬하는 function object
+    struct CoreParticle_isSurf_Compare
+    {
+        bool operator()(const CoreParticle& p1, const CoreParticle& p2)
+        {
+            // 둘다 표면인 경우
+            if(p1.isSurf != 0.0f && p2.isSurf != 0.0f)
+                // 카메라 거리를 이용
+                return p1.toCamera > p2.toCamera;
+            else
+                // 그 이외에는 표면이 아닌 것이 뒤로가게 한다
+                return p1.isSurf > p2.isSurf;
         }
     };
     
 
-
+    // surface particle 의 개수
+    unsigned int SurfCount = 0;
 
     /*  
         SSBO Buffer
@@ -147,7 +163,8 @@ private:
         float viscosity     = 1.0f;
 
         // 3.5 Surface
-        float threshold     = 0.8f;
+        //float threshold     = 0.8f;
+        float threshold     = 0.3f;
         float surfCoeffi    = 0.1f;
 
         // 4. Gravity
@@ -169,9 +186,7 @@ private:
 
 
 
-    // Program 실행 그룹 개수
-    unsigned int GroupNum = 2;
-
+    
 };
 
 #endif // __CONTEXT_H__

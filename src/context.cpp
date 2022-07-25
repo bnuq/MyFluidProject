@@ -70,9 +70,8 @@ bool Context::Init()
     ParticleBuffer 
         = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, NULL, sizeof(Particle), CoreParticleArray.size());
 
-
-    unsigned int temp = 0;
-    CountBuffer = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, &temp, sizeof(unsigned int), 1);
+    CountBuffer 
+        = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, &SurfCount, sizeof(unsigned int), 1);
 
     
     /* SSBO 버퍼를 각 인덱스에 바인딩 */
@@ -122,7 +121,7 @@ bool Context::Init()
             DensityPressureCompute->SetUniform("gasCoeffi", gas.gasCoeffi);
             DensityPressureCompute->SetUniform("gasCoeffi", gas.restDensity);
 
-            glDispatchCompute(GroupNum, 1, 1);
+            glDispatchCompute(Particle::GroupNum, 1, 1);
             glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
             // output 인 Particle data 를 확인
@@ -175,7 +174,7 @@ bool Context::Init()
             ForceCompute->SetUniform("gravityAcel", gravityAcel);
 
 
-            glDispatchCompute(GroupNum, 1, 1);
+            glDispatchCompute(Particle::GroupNum, 1, 1);
             glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
 
@@ -242,7 +241,7 @@ void Context::Init_CoreParticles()
 
     // 카메라까지의 거리를 기준으로 정렬한다
     // 멀리 있는 것이 앞으로 온다
-    std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticleCompare());
+    std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_toCamera_Compare());
 
 
 
@@ -332,7 +331,7 @@ void Context::Render()
         ImGui::DragFloat("deltaTime", &deltaTime);
         ImGui::DragFloat("damping", &damping);
 
-        ImGui::DragFloat("threshold", &threshold, 0.001f, 0.001f);
+        ImGui::DragFloat("threshold", &threshold, 0.001f, 0.0f);
     }
     ImGui::End();
 
@@ -503,7 +502,7 @@ void Context::Get_Density_Pressure()
         DensityPressureCompute->SetUniform("gasCoeffi", gas.restDensity);
 
 
-        glDispatchCompute(GroupNum, 1, 1);
+        glDispatchCompute(Particle::GroupNum, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     glUseProgram(0);
 }
@@ -530,7 +529,7 @@ void Context::Get_Force()
         ForceCompute->SetUniform("gravityAcel", gravityAcel);
 
 
-        glDispatchCompute(GroupNum, 1, 1);
+        glDispatchCompute(Particle::GroupNum, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     glUseProgram(0);
 }
@@ -551,7 +550,7 @@ void Context::Get_Move()
         MoveCompute->SetUniform("CameraPos", MainCam->Position);
 
 
-        glDispatchCompute(GroupNum, 1, 1);
+        glDispatchCompute(Particle::GroupNum, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         // Core Particle 데이터를 읽어온다
@@ -560,7 +559,7 @@ void Context::Get_Move()
             glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
 
             // Camera 까지의 거리를 기준으로 sort
-            std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticleCompare());
+            std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_toCamera_Compare());
 
             // 다시 넣어준다
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
@@ -569,12 +568,11 @@ void Context::Get_Move()
 
         // surface particles 개수를 읽는다
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, CountBuffer->Get());
-            unsigned int temp{};
-            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &temp);
+            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &SurfCount);
 
-            SPDLOG_INFO("Surface count is {}", temp);
+            SPDLOG_INFO("Surface count is {}", SurfCount);
 
-            temp = 0;
+            unsigned int temp = 0;
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &temp);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
@@ -587,22 +585,27 @@ void Context::Draw_Particles(const glm::mat4& projection, const glm::mat4& view)
     // output 버퍼에 저장된 데이터를 이용해서, Particles 를 그린다
     DrawProgram->Use();
   
-            // 정렬된 Core Particle 데이터를 이용해서, 카메라에서 가까운 것 부터 렌더링을 진행
-            for(unsigned int i = 0; i < Particle::TotalParticleCount; i++)
-            {
-                auto ParticlePos = glm::vec3(
-                        CoreParticleArray[i].xpos, CoreParticleArray[i].ypos, CoreParticleArray[i].zpos
-                    );
+        // 렌더링 하기 전에, surface 유무로 정렬을 추가로 진행한다
+        std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_isSurf_Compare());
 
-                auto modelTransform = glm::translate(glm::mat4(1.0f), ParticlePos);
-                auto transform = projection * view * modelTransform;
+        // 정렬된 Core Particle 데이터를 이용해서, 카메라에서 가까운 것 부터 렌더링을 진행
+        // surface count 개수 만큼만 그린다
+        for(unsigned int i = 0; i < SurfCount; i++)
+        //for(unsigned int i = 0; i < Particle::TotalParticleCount; i++)
+        {
+            auto ParticlePos = glm::vec3(
+                    CoreParticleArray[i].xpos, CoreParticleArray[i].ypos, CoreParticleArray[i].zpos
+                );
 
-                DrawProgram->SetUniform("transform", transform);
-                DrawProgram->SetUniform("ViewVec", glm::normalize(MainCam->Position - ParticlePos));
+            auto modelTransform = glm::translate(glm::mat4(1.0f), ParticlePos);
+            auto transform = projection * view * modelTransform;
+
+            DrawProgram->SetUniform("transform", transform);
+            DrawProgram->SetUniform("ViewVec", glm::normalize(MainCam->Position - ParticlePos));
 
 
-                BoxMesh->Draw(DrawProgram.get());
-            }
+            BoxMesh->Draw(DrawProgram.get());
+        }
 
     glUseProgram(0);
 }

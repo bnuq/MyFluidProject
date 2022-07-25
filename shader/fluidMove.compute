@@ -159,12 +159,13 @@ void main()
         
         그리고 surface 를 발견할 때마다 count 개수를 증가시켜, 총 surface 의 개수를 파악할 수 있게 한다
     */
-    if( length(pData[index].surfNormal) > threshold )
+    //if( length(pData[index].surfNormal) > threshold )
+    if( length(pData[index].surfNormal) < threshold )
     {
-        cData[index].isSurf = 1.0f;
+        cData[index].isSurf = 1.0;
         atomicAdd(count, 1);
     }        
     else
-        cData[index].isSurf = 0.0f;
+        cData[index].isSurf = 0.0;
 
 }

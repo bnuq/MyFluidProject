@@ -57,6 +57,9 @@ public:
     // Particle 들의 총 개수
     static unsigned int TotalParticleCount;
 
+    // 1 group = 32 thread => 필요한 그룹 수
+    static unsigned int GroupNum;
+
     // Particle 의 질량
     static float ParticleMass;
 };
