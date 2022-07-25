@@ -27,14 +27,14 @@ bool Context::Init()
 
 
 
-    // 2. Force 만 계산
+    // 2. Force, Surface 계산
     FluidForce = Shader::CreateFromFile("./shader/FluidForce.compute", GL_COMPUTE_SHADER);
     ForceCompute = Program::Create({ FluidForce });
     if(!ForceCompute) return false;
 
 
 
-    // 3. Velocity, Position, ToCamera 계산
+    // 3. Velocity, Position, toCamera, visible 계산
     FluidMove = Shader::CreateFromFile("./shader/FluidMove.compute", GL_COMPUTE_SHADER);
     MoveCompute = Program::Create({ FluidMove });
     if(!MoveCompute) return false;
@@ -71,7 +71,8 @@ bool Context::Init()
         = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, NULL, sizeof(Particle), CoreParticleArray.size());
 
     CountBuffer 
-        = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, &SurfCount, sizeof(unsigned int), 1);
+        = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, &visibleCount, sizeof(unsigned int), 1);
+
 
     
     /* SSBO 버퍼를 각 인덱스에 바인딩 */
@@ -142,7 +143,7 @@ bool Context::Init()
 
                     SPDLOG_INFO("{} th pressure {}", i, ParticleArray[i].pressure);
 
-                    SPDLOG_INFO("{} th toCamera {}", i, ParticleArray[i].toCamera);
+                    SPDLOG_INFO("{} th neighbor {}", i, ParticleArray[i].neighbor);
 
                     SPDLOG_INFO("*** *** *** ***");
                 }
@@ -189,9 +190,9 @@ bool Context::Init()
                 {
                     SPDLOG_INFO("{} th force {}, {}, {}", i, ParticleArray[i].force.x, ParticleArray[i].force.y, ParticleArray[i].force.z);
 
-                    SPDLOG_INFO("{} th surfNormal {}, {}, {}", i, ParticleArray[i].surfNormal.x, ParticleArray[i].surfNormal.y, ParticleArray[i].surfNormal.z);
+                    // SPDLOG_INFO("{} th surfNormal {}, {}, {}", i, ParticleArray[i].surfNormal.x, ParticleArray[i].surfNormal.y, ParticleArray[i].surfNormal.z);
 
-                    SPDLOG_INFO("{} th surf force mag {}", i, ParticleArray[i].surfForceMag);
+                    // SPDLOG_INFO("{} th surf force mag {}", i, ParticleArray[i].surfForceMag);
 
                     SPDLOG_INFO("--- --- --- ---");
                 }
@@ -316,7 +317,7 @@ void Context::Render()
 
     if(ImGui::Begin("Smooth Kernel"))
     {
-        ImGui::DragFloat("Smooth Kernel Radius", &SmoothKernelRadius);
+        ImGui::DragFloat("Smooth Kernel Radius", &SmoothKernelRadius, 0.001f, 0.01f);
 
 
         ImGui::DragFloat("Gas Coeffi", &gas.gasCoeffi);
@@ -332,6 +333,9 @@ void Context::Render()
         ImGui::DragFloat("damping", &damping);
 
         ImGui::DragFloat("threshold", &threshold, 0.001f, 0.0f);
+
+        
+        ImGui::DragFloat("neighborLevel", &neighborLevel, 0.001, 0);
     }
     ImGui::End();
 
@@ -544,6 +548,10 @@ void Context::Get_Move()
         MoveCompute->SetUniform("damping", damping);
 
         MoveCompute->SetUniform("threshold", threshold);
+
+
+        //if(tempNei >= 0) neighborLevel = (unsigned int)tempNei;
+        MoveCompute->SetUniform("neighborLevel", neighborLevel);
         
         // 현재 카메라의 위치를 Uniform 으로 설정
         // Particle 이 최종적으로 움직인 위치에서 카메라까지의 거리를 구해야 한다
@@ -568,9 +576,9 @@ void Context::Get_Move()
 
         // surface particles 개수를 읽는다
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, CountBuffer->Get());
-            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &SurfCount);
+            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &visibleCount);
 
-            SPDLOG_INFO("Surface count is {}", SurfCount);
+            //SPDLOG_INFO("Surface count is {}", visibleCount);
 
             unsigned int temp = 0;
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &temp);
@@ -585,12 +593,12 @@ void Context::Draw_Particles(const glm::mat4& projection, const glm::mat4& view)
     // output 버퍼에 저장된 데이터를 이용해서, Particles 를 그린다
     DrawProgram->Use();
   
-        // 렌더링 하기 전에, surface 유무로 정렬을 추가로 진행한다
-        std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_isSurf_Compare());
+        // 렌더링 하기 전에, visible 유무로 정렬을 추가로 진행한다
+        std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_visible_Compare());
 
         // 정렬된 Core Particle 데이터를 이용해서, 카메라에서 가까운 것 부터 렌더링을 진행
         // surface count 개수 만큼만 그린다
-        for(unsigned int i = 0; i < SurfCount; i++)
+        for(unsigned int i = 0; i < visibleCount; i++)
         //for(unsigned int i = 0; i < Particle::TotalParticleCount; i++)
         {
             auto ParticlePos = glm::vec3(

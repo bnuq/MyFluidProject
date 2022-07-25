@@ -80,28 +80,36 @@ private:
     Light m_light;
 
 
+
+
+
+    /**********************************************************************************/
+
+
+
+
+
     // Compute Shaders
-    ShaderPtr FluidDensityPressure;     // 밀도, 압력 계산 compute shader
-    ShaderPtr FluidForce;               // 알짜힘을 계산하는 compute shader
-    ShaderPtr FluidMove;                // 유체의 움직임을 계산하는 Compute Shader
+    ShaderPtr FluidDensityPressure;          // 밀도, 압력 계산 compute shader
+    ShaderPtr FluidForce;                    // 알짜힘을 계산하는 compute shader
+    ShaderPtr FluidMove;                     // 유체의 움직임을 계산하는 Compute Shader
 
 
 
 
-
-    // 유체를 구성하는 Particle Struct
-    // Particle 데이터를 저장하는 배열 => CPU
+    // CPU 에서 Core Particle 데이터를 저장하는 배열 => 프레임이 바뀌어도 저장되어야 하는 정보들로 구성
     std::vector<CoreParticle> CoreParticleArray{};
 
 
-    // 일단 중간중간에 Particle 내용을 확인하기 위해 사용하는 array
-    std::vector<Particle> ParticleArray{};
+        // 일단 중간중간에 Particle 내용을 확인하기 위해 사용하는 array
+        std::vector<Particle> ParticleArray{};
 
 
-    // Particle 들의 초기 위치 값을 넣는 함수
+    // Core Particle 들의 초기 위치 값을 넣는 함수
     void Init_CoreParticles();
 
-    // Particle 들을 카메라 까지의 거리로 정렬하는 function object
+
+    // Core Particle ~ 카메라 까지의 거리로 정렬하는 function object
     struct CoreParticle_toCamera_Compare
     {
         bool operator()(const CoreParticle& p1, const CoreParticle& p2)
@@ -111,43 +119,44 @@ private:
         }
     };
 
-    // 렌더링하기 전에, surface 유무를 이용해서 정렬하는 function object
-    struct CoreParticle_isSurf_Compare
+
+    // 파티클들을 렌더링하기 전에, visible 데이터를 이용해서 정렬하는 function object
+    struct CoreParticle_visible_Compare
     {
         bool operator()(const CoreParticle& p1, const CoreParticle& p2)
         {
-            // 둘다 표면인 경우
-            if(p1.isSurf != 0.0f && p2.isSurf != 0.0f)
-                // 카메라 거리를 이용
+            // 둘다 보이는 경우
+            if(p1.visible != 0 && p2.visible != 0)
+                // 카메라 거리를 이용, 거리가 더 먼 것이 앞으로 온다
                 return p1.toCamera > p2.toCamera;
             else
-                // 그 이외에는 표면이 아닌 것이 뒤로가게 한다
-                return p1.isSurf > p2.isSurf;
+                // 그 이외에는 보이는 것이 앞으로 오게 정렬한다
+                return p1.visible > p2.visible;
         }
     };
     
 
-    // surface particle 의 개수
-    unsigned int SurfCount = 0;
+    // visible core particles 의 갯수
+    unsigned int visibleCount = 0;
+
 
     /*  
         SSBO Buffer
      */
     BufferPtr CoreParticleBuffer;       // Core Particle 데이터를 저장, 해당 타입으로 데이터를 주고 받는다
     BufferPtr ParticleBuffer;           // Particle 데이터, GPU 내에서만 저장하고 사용
-    BufferPtr CountBuffer;
+    BufferPtr CountBuffer;              // visible count 값을 읽어오는 버퍼
 
 
     unsigned int CoreParticle_Index  = 1;
     unsigned int Particle_Index  = 2;
-
     unsigned int Count_Index = 5;
 
 
 
     // 각 프로그램에서 필요로 하는 Uniform Variables
         // 1. Smooth Kernel
-        float SmoothKernelRadius = 0.8f;
+        float SmoothKernelRadius = 1.6f;
         //float SmoothKernelRadius = 10.0f;
         
         // 2. Gas
@@ -176,6 +185,11 @@ private:
         // 6. Damping
         float damping   = 0.2f;
 
+        // 7. Visible
+        // unsigned int neighborLevel = 4;
+        // int tempNei = 4;
+        float neighborLevel = 0.0005f;
+        float tempNei = 4;
 
 
     // Program 실행 함수

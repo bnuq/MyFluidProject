@@ -39,11 +39,11 @@ float W_Poly6(float r2) { return (315.0 / (64 * PI * pow(abs(h), 9.0) ) ) * pow(
     -                 =>      density         , Update_Density_Pressure
     -                         pressure        , Update_Density_Pressure
 
-                              -
-                              -
                               
-    -
-    toCamera                  toCamera
+    -                         -
+    toCamera ~> 버리고
+    visible  ~> 버리고
+                              neighbor 체크
  */
 struct CoreParticle
 {
@@ -57,7 +57,7 @@ struct CoreParticle
 
     float toCamera;
 
-    float isSurf;
+    uint visible;
 };
 
 layout(std430, binding = 1) buffer CoreParticleBuffer
@@ -76,11 +76,12 @@ struct Particle
     float density;
     float pressure;
 
-    vec3 surfNormal;
-    float surfForceMag;
+    // vec3 surfNormal;
+    // float surfForceMag;
 
     vec3 force;
-    float toCamera;
+    //uint neighbor;
+    float neighbor;
 };
 
 layout(std430, binding = 2) buffer ParticleBuffer
@@ -115,8 +116,6 @@ void main()
     // update velocity
     pData[index].velocity = vec4( cData[index].xvel, cData[index].yvel, cData[index].zvel, 0.0 );
 
-    // update toCamera
-    pData[index].toCamera = cData[index].toCamera;
 
 
 
@@ -158,13 +157,17 @@ void main()
         update range
             x => far, y => near
      */
-        pData[index].range.x = PossibleFar;
-        pData[index].range.y = PossibleNear;
+    pData[index].range.x = PossibleFar;
+    pData[index].range.y = PossibleNear;
+
 
 
 
     float newDensity = 0.0;     // 새로운 밀도
     float newPressure = 0.0;    // 새로운 압력
+
+    //uint newNeighbor = 0;       // 새로운 주변 파티클 개수
+    vec3 neiVec = vec3(0, 0, 0);
 
     /* 
         자기 자신이 검색 대상에 포함되어
@@ -179,11 +182,16 @@ void main()
     for(uint neId = pData[index].range.x; neId <= pData[index].range.y; neId++)
     {
         vec3 relativePos = vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos) - vec3(cData[neId].xpos, cData[neId].ypos, cData[neId].zpos);
-
         float rSquare = dot(relativePos, relativePos);
 
-        if(rSquare < hSquare)       // 실제 영향 여부는 직접 체크해야 한다
+        // 실제 영향 여부는 직접 체크해야 한다
+        if(rSquare < hSquare)
+        {
             newDensity += particleMass * W_Poly6(rSquare);
+            //newNeighbor += 1;
+            if(neId != index)
+                neiVec += normalize(relativePos);
+        }
     }
 
     // 새롭게 구한 밀도 -> 새로운 압력 구함
@@ -193,4 +201,7 @@ void main()
     // Update
     pData[index].density  = newDensity;
     pData[index].pressure = newPressure;
+    
+    //pData[index].neighbor = newNeighbor;
+    pData[index].neighbor = length(neiVec);
 }
