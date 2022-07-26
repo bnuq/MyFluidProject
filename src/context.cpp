@@ -539,6 +539,8 @@ void Context::Find_Visible()
         VisibleCompute->SetUniform("n", visibleCoeffi);
         VisibleCompute->SetUniform("visibleThre", visibleThre);
 
+        VisibleCompute->SetUniform("camPos", MainCam->Position);
+
         glDispatchCompute(Particle::GroupNum, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 

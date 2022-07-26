@@ -13,6 +13,9 @@ uniform float n;
 // visible 을 결정하는 threshold, 이거 보다 커야 visible 하다
 uniform float visibleThre;
 
+uniform vec3 camPos;
+
+
 
 struct CoreParticle
 {
@@ -85,7 +88,7 @@ void main()
     }
 
 
-    // 상대 파티클을 향한 벡터
+    // 상대 파티클을 향한 벡터 => 자신 주변 유체의 중심을 향하게 된다
     vec3 acumVec = vec3(0, 0, 0);
     
     // 이제 검색 범위 내에서, n*h 이내에 존재하는 모든 파티클들을 조사
@@ -105,15 +108,32 @@ void main()
             acumVec += (n*h - len) * normalize(MeToYou);
     }
 
+    
+
+
     // 누적 벡터에서, +y 성분은 제거한다
     if(acumVec.y > 0) acumVec.y = 0;
 
+    // 일단 기본적인 크기로 한번 거른다
     // 누적 벡터의 길이를 확인 => 한 쪽 성분이 살아 있어서, 길이가 충분히 길다면 외부 = visible
     if(length(acumVec) > visibleThre)
     {
-        cData[index].visible = 1;
-        atomicAdd(count, 1);
+        // 일단 일정 크기이상의 acumVec 가 있는 파티클들 중에서
+        // 카메라를 향하는 벡터 이용
+        vec3 ParticleToCam = camPos - vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos);
+        if(dot(acumVec, ParticleToCam) > 0)     // non - visible
+            cData[index].visible = 0;
+        else
+        {
+            cData[index].visible = 1;
+            atomicAdd(count, 1);
+        }
     }
     else
         cData[index].visible = 0;
+
+
+    // acumVec 와 카메라를 향하는 벡터 2개를 이용
+    
+    
 }
