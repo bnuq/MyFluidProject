@@ -3,6 +3,16 @@
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 
+
+uniform float deltaTime;
+
+uniform vec3 LimitRange;
+uniform float damping;
+
+uniform vec3 CameraPos;
+
+
+
 /*
     [Particle]                  [Core Particle]
 
@@ -17,7 +27,7 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
     force                   
     neighbor                    
                                 new toCamera
-                                new visible
+                                -
  */
 struct CoreParticle
 {
@@ -33,11 +43,11 @@ struct CoreParticle
 
     uint visible;
 };
-
 layout(std430, binding = 1) buffer CoreParticleBuffer
 {
     CoreParticle cData[];
 };
+
 
 
 struct Particle
@@ -50,56 +60,13 @@ struct Particle
     float density;
     float pressure;
 
-    // vec3 surfNormal;
-    // float surfForceMag;
-
     vec3 force;
-    //uint neighbor;
-    float neighbor;
+    uint neighbor;
 };
-
 layout(std430, binding = 2) buffer ParticleBuffer
 {
     Particle pData[];
 };
-
-
-layout(std430, binding = 5) buffer CountBuffer
-{
-    uint count;
-};
-
-
-
-
-
-
-uniform float deltaTime;
-
-uniform vec3 LimitRange;
-uniform float damping;
-
-uniform vec3 CameraPos;
-
-
-uniform float threshold;
-
-uniform float neighborLevel;
-
-/* 
-    한 파티클의 내용을 업데이트 하는 과정
-    다른 파티클의 데이터를 읽지도 않고, 필요로 하지도 않는다
-
-    1. Particle 의 속도에 맞게 이동시키기
-        Make_Move(index)
-
-    2. 범위를 벗어나는 지 확인하고, 벗어나는 경우 되돌리기
-        Check_Range(index)
-
-    3. 최종 위치로부터 카메라까지의 거리 구하기
-        Get_Camera_Distance(index)
- */
-
 
 
 
@@ -109,11 +76,12 @@ void main()
     uint index = gl_GlobalInvocationID.x;
 
 
+    // 일단 속도, 위치를 변화시키고
     pData[index].velocity.xyz += deltaTime * (pData[index].force.xyz / pData[index].density);
     pData[index].position.xyz += deltaTime * pData[index].velocity.xyz;
 
 
-    // 경계 체크
+    // 경계 체크 => 속도, 위치를 적적하게 변화시킨다
     // 경계를 벗어난 파티클 => 돌아가야 하는 경계를 가리키는 벡터
     vec3 OverVec = vec3(0, 0, 0);
 
@@ -123,46 +91,32 @@ void main()
     else if(pData[index].position.x > LimitRange.x)         OverVec.x += LimitRange.x - pData[index].position.x;
     
     if     (pData[index].position.y < 0)                    OverVec.y -= pData[index].position.y;
-    else if(pData[index].position.y > LimitRange.y)        OverVec.y += LimitRange.y - pData[index].position.y;
+    else if(pData[index].position.y > LimitRange.y)         OverVec.y += LimitRange.y - pData[index].position.y;
 
     if     (pData[index].position.z < 0)                    OverVec.z -= pData[index].position.z;
-    else if(pData[index].position.z > LimitRange.z)        OverVec.z += LimitRange.z - pData[index].position.z;
+    else if(pData[index].position.z > LimitRange.z)         OverVec.z += LimitRange.z - pData[index].position.z;
 
     // 들어오는 벡터가 0 이 아닌 경우 => 벗어남이 존재한다
     if(length(OverVec) != 0)
     {
-        pData[index].velocity.xyz = normalize(OverVec) * damping;   // 속도를 강제로 들어오는 방향으로 설정
-        pData[index].position.xyz += (1.00001) * OverVec;;           // 위치를 강제로 영역 내부로 넣어버린다
+        pData[index].velocity.xyz = normalize(OverVec) * damping;    // 속도를 강제로 들어오는 방향으로 설정
+        pData[index].position.xyz += (1.00001) * OverVec;            // 위치를 강제로 영역 내부로 넣어버린다
     }
 
 
 
-    // update position
+    // 1. update position
     cData[index].xpos = pData[index].position.x;
     cData[index].ypos = pData[index].position.y;
     cData[index].zpos = pData[index].position.z;
 
     
-    // update velocity    
+    // 2. update velocity    
     cData[index].xvel = pData[index].velocity.x;
     cData[index].yvel = pData[index].velocity.y;
     cData[index].zvel = pData[index].velocity.z;
 
 
-    // update toCamera
+    // 3. update toCamera
     cData[index].toCamera = distance(CameraPos, pData[index].position.xyz);
-
-
-
-    /* 
-        neighbor 값이 0 이다 == particle 이 없는 방향이 있었다 = 외부다
-    */
-    if(pData[index].neighbor != 0)   // 내부다 == non-visible
-        cData[index].visible = 0;
-    else                                        // 외부다 == visible
-    {
-        cData[index].visible = 1;
-        atomicAdd(count, 1);
-    }
-
 }

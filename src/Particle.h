@@ -39,12 +39,8 @@ public:
     float density          = 0.0f;
     float pressure         = 0.0f;
 
-    // glm::vec3 surfNormal   = glm::vec3(0.0f, 0.0f, 0.0f);         // particle surface normal
-    // float surfForceMag     = 0.0f;                                // 표면 장력의 크기
-
     glm::vec3 force        = glm::vec3(0.0f, 0.0f, 0.0f);         // net force
-    //unsigned int neighbor  = 0;                                   // 해당 파티클에 영향을 미치는 다른 파티클 개수
-    float neighbor          = 0.0f;
+    unsigned int neighbor  = 0;
     
 
 

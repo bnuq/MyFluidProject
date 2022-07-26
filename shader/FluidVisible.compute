@@ -1,0 +1,119 @@
+#version 460 core
+
+layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+
+
+uniform float h;
+
+uniform uint TotalParticleCount;
+
+// 1 이상, 검색 범위를 지정하는 인자
+uniform float n;
+
+// visible 을 결정하는 threshold, 이거 보다 커야 visible 하다
+uniform float visibleThre;
+
+
+struct CoreParticle
+{
+    float xpos;
+    float ypos;
+    float zpos;
+
+    float xvel;
+    float yvel;
+    float zvel;
+
+    float toCamera;
+
+    uint visible;
+};
+layout(std430, binding = 1) buffer CoreParticleBuffer
+{
+    CoreParticle cData[];
+};
+
+
+
+layout(std430, binding = 5) buffer CountBuffer
+{
+    uint count;
+};
+
+
+
+/* 
+    새로운 위치와 새로운 tocamera 값을 가지고 있는 상태
+    주변에 파티클이 어떻게 있는 지 확인한다
+ */
+void main()
+{
+    // ssbo 에 접근하는 스레드의 인덱스
+    uint index = gl_GlobalInvocationID.x;
+
+
+    uint PossibleFar;         // 가능성이 있는 영역의 파티클 중, 카메라에서 가장 멀리 있는 파티클 인덱스
+    uint PossibleNear;        // 가능성이 있는 영역의 파티클 중, 카메라에서 가장 가까이 있는 파티클 인덱스
+    
+    // index => 0 검색, Current Particle 보다 멀리 있는 Particles 를 조사한다
+    for(uint farId = index; farId >= 0; farId--)
+    {
+        if(farId == 0)
+        {
+            PossibleFar = 0;
+            break;
+        }
+        // n*h 보다 멀리 떨어져 있으면 그만 검색
+        if(cData[farId].toCamera >= cData[index].toCamera + n * h)    
+            break;
+        else
+            PossibleFar = farId;
+    }
+
+    // index => particleCount 검색, Current Particle 보다 가까이 있는 Particles 를 조사한다
+    if(cData[index].toCamera - n * h < 0)   // n*h 가 긴 경우 => 모든 파티클을 조사
+        PossibleNear = TotalParticleCount - 1;
+    else
+    {
+        for(uint nearId = index; nearId < TotalParticleCount; nearId++)
+        {
+            if(cData[nearId].toCamera <= cData[index].toCamera - n * h)
+                break;
+            else
+                PossibleNear = nearId;
+        }
+    }
+
+
+    // 상대 파티클을 향한 벡터
+    vec3 acumVec = vec3(0, 0, 0);
+    
+    // 이제 검색 범위 내에서, n*h 이내에 존재하는 모든 파티클들을 조사
+    for(uint neId = PossibleFar; neId <= PossibleNear; neId++)
+    {
+        // 자기 자신에 대한 조사는 제외
+        if(neId == index) continue;
+
+        // 내가 상대 파티클을 바라보는 벡터
+        vec3 MeToYou = vec3(cData[neId].xpos, cData[neId].ypos, cData[neId].zpos) - vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos);
+
+        float len = length(MeToYou);
+
+        // 거리가 n*h 보다 작은 경우
+        if( len < n * h )
+            // 가중치를 이용해서, 상대를 향한 벡터를 누적한다
+            acumVec += (n*h - len) * normalize(MeToYou);
+    }
+
+    // 누적 벡터에서, +y 성분은 제거한다
+    if(acumVec.y > 0) acumVec.y = 0;
+
+    // 누적 벡터의 길이를 확인 => 한 쪽 성분이 살아 있어서, 길이가 충분히 길다면 외부 = visible
+    if(length(acumVec) > visibleThre)
+    {
+        cData[index].visible = 1;
+        atomicAdd(count, 1);
+    }
+    else
+        cData[index].visible = 0;
+}

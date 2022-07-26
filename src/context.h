@@ -45,12 +45,6 @@ private:
     glm::vec2 m_prevMousePos { glm::vec2(0.0f) };
 
 
-    // Programs
-    ProgramUPtr DensityPressureCompute;     // 밀도와 압력만 먼저 계산
-    ProgramUPtr ForceCompute;               // 입자의 알짜힘 계산
-    ProgramUPtr MoveCompute;                // 유체 움직이기
-    ProgramUPtr DrawProgram;                // 유체 그리기
-
 
     // Meshes => 모든 유체는 박스의 형태로만 표현
     MeshUPtr BoxMesh;
@@ -84,15 +78,21 @@ private:
 
 
     /**********************************************************************************/
-
-
+    
+    // Programs
+    ProgramUPtr DensityPressureCompute;     // 밀도와 압력만 먼저 계산
+    ProgramUPtr ForceCompute;               // 입자의 알짜힘 계산
+    ProgramUPtr MoveCompute;                // 유체 움직이기
+    ProgramUPtr VisibleCompute;             // 보이는 것 결정하기
+    ProgramUPtr DrawProgram;                // 유체 그리기
 
 
 
     // Compute Shaders
     ShaderPtr FluidDensityPressure;          // 밀도, 압력 계산 compute shader
     ShaderPtr FluidForce;                    // 알짜힘을 계산하는 compute shader
-    ShaderPtr FluidMove;                     // 유체의 움직임을 계산하는 Compute Shader
+    ShaderPtr FluidMove;                     // 유체의 움직임을 계산하는 compute Shader
+    ShaderPtr FluidVisible;                  // 파티클 중, 눈에 보이는 것을 찾는 compute shader
 
 
 
@@ -195,10 +195,14 @@ private:
         float correction = 0.1f;
 
 
+        float visibleCoeffi = 2.5f;
+        float visibleThre   = 4.0f;
+
     // Program 실행 함수
     void Get_Density_Pressure();
     void Get_Force();
     void Get_Move();
+    void Find_Visible();
     void Draw_Particles(const glm::mat4& proj, const glm::mat4& view);
 
 

@@ -80,10 +80,9 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
     pressure                    pressure
 
 
-    -               =>          force               , = pressure force + viscosity force (Update_Fluid_Force)
-                                                      + Surface Force => 표면이라는 게 확정이 되면
-                                                      + extra force                      (Update_Extra_Force)
-
+    -               =>          force               = pressure force + viscosity force (Update_Fluid_Force)
+                                                    + Surface Force => 표면이라는 게 확정이 되면
+                                                    + extra force                      (Update_Extra_Force)
     neighbor                    neighbor
  */
 
@@ -97,14 +96,9 @@ struct Particle
     float density;
     float pressure;
 
-    // vec3 surfNormal;
-    // float surfForceMag;
-
     vec3 force;
-    //uint neighbor;
-    float neighbor;
+    uint neighbor;
 };
-
 layout(std430, binding = 2) buffer ParticleBuffer
 {
     Particle pData[];
@@ -118,18 +112,14 @@ void Update_Fluid_Force(uint myId)
     // force 초기화
     pData[myId].force = vec3(0.0, 0.0, 0.0);
 
+    vec3 PressureForce    = vec3(0.0, 0.0, 0.0);        // 압력에 의한 힘
+    vec3 ViscosityForce   = vec3(0.0, 0.0, 0.0);        // 점성에 의한 힘
 
-    // 이번에 구하고자 하는 값들
-    vec3 PressureForce    = vec3(0.0, 0.0, 0.0);
-    vec3 ViscosityForce   = vec3(0.0, 0.0, 0.0);
+    vec3 SurfaceNormal    = vec3(0.0, 0.0, 0.0);        // 표면->유체 를 향하는 벡터
+    float SurfaceForceMag = 0.0;                        // 표면장력 크기
 
-    vec3 SurfaceNormal    = vec3(0.0, 0.0, 0.0);
-    float SurfaceForceMag = 0.0;
-
-
-    // 혹시라도 반복을 줄일 수 있을까 싶어서 + 자기 자신이 포함된 count 이므로 1 로 초기화한다
+    // 탐색한 이웃의 수를 체크, neighbor 에 자기 자신이 포함되어 있으므로 1 로 초기화
     uint countCheck = 1;
-
 
     // range 범위를 조사, far->near
     for(uint neId = pData[myId].range.x; neId <= pData[myId].range.y; neId++)
@@ -138,13 +128,11 @@ void Update_Fluid_Force(uint myId)
         vec3 relativePos = pData[myId].position.xyz - pData[neId].position.xyz;
         float rSquare = dot(relativePos, relativePos);
 
-
         // 영향력 있는 거리 안이다 + 자기 자신에 대한 연산은 제외한다( normalize 에서 에러 발생 )
         if(rSquare != 0 && rSquare < hSquare)
         {
             // 영향을 주는 파티클을 하나 만났다
             countCheck += 1;
-
 
             float rLength = length(relativePos);
             vec3 unitRelativePos = normalize(relativePos);
@@ -180,16 +168,12 @@ void Update_Fluid_Force(uint myId)
             SurfaceForceMag += particleMass / pData[neId].density * Laplace_W_Poly6(rSquare);
         }
 
-
         // 혹시 영향을 주는 파티클을 모두 만났으면, 더이상 검색할 필요 없다
-        //if(countCheck >= pData[myId].neighbor) break;
+        if(countCheck >= pData[myId].neighbor) break;
     }
 
-
-
-    // 모든 값을 저장한다
+    // 압력, 점성에 의한 힘 저장
     pData[myId].force = (PressureForce + ViscosityForce);
-
 
     // surface normal 이 일정 크기 이상이면, 표면 장력을 더한다
     if( length(SurfaceNormal) > threshold )
@@ -213,6 +197,7 @@ void Add_Extra_Force(uint myId)
     // 추가적인 힘을 더해 저장
     pData[myId].force += ExtraForce;
 }
+
 
 
 void main()
