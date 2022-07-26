@@ -105,7 +105,8 @@ void main()
         // 거리가 n*h 보다 작은 경우
         if( len < n * h )
             // 가중치를 이용해서, 상대를 향한 벡터를 누적한다
-            acumVec += (n*h - len) * normalize(MeToYou);
+            //acumVec += (n*h - len) * normalize(MeToYou);
+            acumVec += normalize(MeToYou);
     }
 
     
@@ -118,16 +119,18 @@ void main()
     // 누적 벡터의 길이를 확인 => 한 쪽 성분이 살아 있어서, 길이가 충분히 길다면 외부 = visible
     if(length(acumVec) > visibleThre)
     {
-        // 일단 일정 크기이상의 acumVec 가 있는 파티클들 중에서
-        // 카메라를 향하는 벡터 이용
-        vec3 ParticleToCam = camPos - vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos);
-        if(dot(acumVec, ParticleToCam) > 0)     // non - visible
-            cData[index].visible = 0;
-        else
-        {
-            cData[index].visible = 1;
-            atomicAdd(count, 1);
-        }
+        // // 일단 일정 크기이상의 acumVec 가 있는 파티클들 중에서
+        // // 카메라를 향하는 벡터 이용
+        // vec3 ParticleToCam = camPos - vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos);
+        // if(dot(acumVec, ParticleToCam) > 0)     // non - visible
+        //     cData[index].visible = 0;
+        // else
+        // {
+        //     cData[index].visible = 1;
+        //     atomicAdd(count, 1);
+        // }
+        cData[index].visible = 1;
+        atomicAdd(count, 1);
     }
     else
         cData[index].visible = 0;

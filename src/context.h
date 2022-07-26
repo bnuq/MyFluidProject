@@ -199,8 +199,8 @@ private:
         float correction = 0.1f;
 
 
-        float visibleCoeffi = 2.5f;
-        float visibleThre   = 4.0f;
+        float visibleCoeffi = 1.1f;
+        float visibleThre   = 3.8f;
 
     // Program 실행 함수
     void Get_Density_Pressure();
