@@ -39,10 +39,14 @@ private:
     // Window Information
     int m_width { WINDOW_WIDTH };
     int m_height { WINDOW_HEIGHT };
-    glm::vec4 m_clearColor { glm::vec4(0.1f, 0.2f, 0.3f, 0.0f) };
+    glm::vec4 m_clearColor { glm::vec4(0.5f, 0.5f, 0.5f, 0.0f) };
 
     // Mouse
     glm::vec2 m_prevMousePos { glm::vec2(0.0f) };
+
+    glm::vec2 m_giveForceMousePos { glm::vec2(0, 0) };
+    bool m_giveForceMouse = false;
+    glm::vec2 mouseForce { glm::vec2(0, 0) };
 
 
 
@@ -183,7 +187,7 @@ private:
         float deltaTime = 0.008f;
 
         // 6. Damping
-        float damping   = 0.2f;
+        float damping   = 0.8f;
 
         // 7. Visible
         // unsigned int neighborLevel = 4;

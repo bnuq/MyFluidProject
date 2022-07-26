@@ -13,5 +13,5 @@ void main()
     if(ViewRatio < 0) alphaVal = 0;
     else              alphaVal = ViewRatio * 0.2;
         
-    fragColor = vec4(1, 1, 0, alphaVal);
+    fragColor = vec4(0, 0, 1, alphaVal);
 }

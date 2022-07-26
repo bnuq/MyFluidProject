@@ -25,9 +25,12 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 // 2 => Extra Force
     uniform vec3 gravityAcel;
 
-
+    uniform vec2 mouseForce;
     
-
+    uniform float xRange;
+    uniform float yRange;
+    uniform float time;
+    uniform float wavePower;
 
     
 
@@ -193,6 +196,14 @@ void Add_Extra_Force(uint myId)
     ExtraForce += gravityAcel * curDensity;
 
 
+    // 마우스에 의한 힘
+    ExtraForce += vec3(-mouseForce.x, 0, -mouseForce.y) * 1.0;
+
+
+    // 파도의 의한 힘
+    vec3 waveF = vec3(0, sin(pData[myId].position.x / xRange * PI + time), 0);
+    waveF *= (1 - pData[myId].position.y / yRange) * wavePower;
+    ExtraForce += waveF;
 
     // 추가적인 힘을 더해 저장
     pData[myId].force += ExtraForce;

@@ -16,7 +16,7 @@ ContextUPtr Context::Create()
 
 bool Context::Init()
 {
-    glClearColor(0.1f, 0.2f, 0.3f, 0.0f);
+    glClearColor(m_clearColor.x, m_clearColor.y, m_clearColor.z, m_clearColor.w);
 
 
     /* Initialize Programs */
@@ -284,17 +284,41 @@ void Context::Reshape(int width, int height)
 }
 void Context::MouseMove(double x, double y)
 {
-    if(!m_cameraControl) return;
+    if(m_cameraControl)
+    {
+        auto pos = glm::vec2((float)x, (float)y);
+        auto deltaPos = pos - m_prevMousePos;
 
+        MainCam->Rotate(deltaPos);
+        m_prevMousePos = pos;
+    }
 
-    auto pos = glm::vec2((float)x, (float)y);
-    auto deltaPos = pos - m_prevMousePos;
+    if(m_giveForceMouse)
+    {
+        auto pos = glm::vec2((float)x, (float)y);
+        auto deltaPos = pos - m_giveForceMousePos;
 
-    MainCam->Rotate(deltaPos);
-    m_prevMousePos = pos;
+        mouseForce += deltaPos;
+        m_giveForceMousePos = pos;
+    }
 }
 void Context::MouseButton(int button, int action, double x, double y)
 {
+    if (button == GLFW_MOUSE_BUTTON_MIDDLE)  // 중간 키 클릭
+    {
+        if (action == GLFW_PRESS)
+        {
+            // 마우스 조작 시작 시점에 현재 마우스 커서 위치 저장
+            m_giveForceMousePos = glm::vec2((float)x, (float)y);
+            m_giveForceMouse = true;
+        }
+        else if (action == GLFW_RELEASE)
+        {
+            m_giveForceMouse = false;
+        }
+    }
+
+
     if (button == GLFW_MOUSE_BUTTON_RIGHT)  // 우측 키 클릭
     {
         if (action == GLFW_PRESS)
@@ -378,6 +402,7 @@ void Context::Render()
     // 렌더링을 위한 설정
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    //glBlendFunc(GL_SRC_ALPHA, GL_SRC_ALPHA);
         Draw_Particles(projection, view);
     glDisable(GL_BLEND);
 }
@@ -441,6 +466,20 @@ void Context::Get_Force()
 
         // 2
         ForceCompute->SetUniform("gravityAcel", gravityAcel);
+
+        ForceCompute->SetUniform("xRange", Particle::FluidRange.x);
+        ForceCompute->SetUniform("yRange", Particle::FluidRange.y);
+        ForceCompute->SetUniform("time", (float)glfwGetTime());
+        ForceCompute->SetUniform("wavePower", 3.0f);
+
+        // 마우스 좌클릭이 없는데, 힘이 있을 때, 힘을 넘기고 힘 초기화
+        if(!m_giveForceMouse && (glm::length(mouseForce) != 0))
+        {
+            ForceCompute->SetUniform("mouseForce", mouseForce);
+            mouseForce = glm::vec2(0);
+        }
+        else
+            ForceCompute->SetUniform("mouseForce", glm::vec2(0));
 
 
         glDispatchCompute(Particle::GroupNum, 1, 1);
