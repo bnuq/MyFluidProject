@@ -16,7 +16,7 @@ uniform float visibleThre;
 uniform vec3 camPos;
 
 uniform float controlValue;
-
+uniform float ratio;
 
 struct CoreParticle
 {
@@ -47,7 +47,7 @@ layout(std430, binding = 5) buffer CountBuffer
 
 
 /* 
-    새로운 위치와 새로운 tocamera 값을 가지고 있는 상태
+    새로운 위치와 새로운 toCamera 값을 가지고 있는 상태
     주변에 파티클이 어떻게 있는 지 확인한다
 
     자신보다 카메라에 가까운 다른 파티클을 조사
@@ -61,6 +61,13 @@ void main()
     // ssbo 에 접근하는 스레드의 인덱스
     uint index = gl_GlobalInvocationID.x;
 
+    // 가장 짧은 to camera
+    float shortestToCamera = cData[TotalParticleCount - 1].toCamera;
+    float longestToCamera = cData[0].toCamera;
+    // [0, 1]
+    float myToCameraRatio = (cData[index].toCamera - shortestToCamera) / (longestToCamera - shortestToCamera);
+    //float myToCameraRatio = (longestToCamera - cData[index].toCamera) / (longestToCamera - shortestToCamera);
+
     vec3 MeToCam = camPos - vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos);
 
     // 현재 파티클에서, 카메라에 더 가까운 파티클들에 대해서만 조사
@@ -68,12 +75,20 @@ void main()
     {
         // 코사인 법칙을 이용해서 두 벡터 사이의 각도를 구하자
         // 내가 상대 파티클을 바라보는 벡터
-        vec3 MeToYou = vec3(cData[neId].xpos, cData[neId].ypos, cData[neId].zpos) - vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos);
+        vec3 MeToYou = vec3(cData[neId].xpos, cData[neId].ypos, cData[neId].zpos) - vec3(cData[index].xpos, cData[index]
+        .ypos, cData[index].zpos);
 
+        // [-1, +1] 사이의 값
         float cosTheta = dot(MeToCam, MeToYou) / ( length(MeToCam) * length(MeToYou) );
+        // [0, pi] 사이의 각도를 갖는다
+        float theta = acos(cosTheta);
 
-        // 두 벡터 내적의 크기 => 각이 작을수록 코사인 값이 크다, 1 에 가깝다
-        if( cosTheta * 100 > controlValue )  // 특정 값보다 클 경우, 두 벡터가 너무 가깝다는 뜻
+        // 파티클이 멀리 있을수록 limit angle 의 크기가 작다
+        float limitAngle = controlValue - myToCameraRatio * ratio;
+        
+        // 각도가 limit angle 보다 작다 => 겹친다 => 안보인다
+        if( theta < limitAngle )
+        //if( cosTheta * 1000 > controlValue - myToCameraRatio)
         {
             // 무조건 non-visible
             cData[index].visible = 0;

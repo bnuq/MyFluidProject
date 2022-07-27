@@ -371,7 +371,8 @@ void Context::Render()
         ImGui::DragFloat("visible thre", &visibleThre, 0.0001, 1);
 
 
-        ImGui::DragFloat("controlValue", &controlValue, 0.0001, 1000);
+        ImGui::DragFloat("controlValue", &controlValue, 0.0001, 3);
+        ImGui::DragFloat("ratio", &ratio, 0.0001, 1);
 
 
         ImGui::Text("Visible Count is %d", visibleCount);
@@ -578,6 +579,7 @@ void Context::Find_Visible()
 
         VisibleCompute->SetUniform("camPos", MainCam->Position);
         VisibleCompute->SetUniform("controlValue", controlValue);
+        VisibleCompute->SetUniform("ratio", ratio);
 
         glDispatchCompute(Particle::GroupNum, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
