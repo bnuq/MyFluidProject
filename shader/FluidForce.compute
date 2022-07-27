@@ -219,6 +219,7 @@ void main()
     // 1. 영향을 받는 힘을 구하고
     Update_Fluid_Force(index);
 
+
     // 2. 영향을 안 받는 힘을 구한다
     Add_Extra_Force(index);
 }
