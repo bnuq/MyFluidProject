@@ -42,7 +42,8 @@ public:
     glm::vec3 force        = glm::vec3(0.0f, 0.0f, 0.0f);         // net force
     unsigned int neighbor  = 0;
     
-
+    glm::vec3 surfNormal   = glm::vec3(0.0f, 0.0f, 0.0f);           // 유체를 향하는 surface normal 벡터
+    unsigned int isSurface = 0;                                     // 표면 여부를 확인, surf normal 크기가 일정이상 넘으면 1 을 가진다
 
 
     // Fluid 가 담기는 영역

@@ -177,7 +177,7 @@ private:
 
         // 3.5 Surface
         //float threshold     = 0.8f;
-        float threshold     = 0.3f;
+        float threshold     = 0.1f;
         float surfCoeffi    = 0.1f;
 
         // 4. Gravity
@@ -201,6 +201,9 @@ private:
 
         float visibleCoeffi = 1.1f;
         float visibleThre   = 3.8f;
+
+
+        float controlValue = 0.1f;
 
     // Program 실행 함수
     void Get_Density_Pressure();

@@ -15,6 +15,7 @@ uniform float visibleThre;
 
 uniform vec3 camPos;
 
+uniform float controlValue;
 
 
 struct CoreParticle
@@ -54,6 +55,7 @@ void main()
     // ssbo 에 접근하는 스레드의 인덱스
     uint index = gl_GlobalInvocationID.x;
 
+    
 
     uint PossibleFar;         // 가능성이 있는 영역의 파티클 중, 카메라에서 가장 멀리 있는 파티클 인덱스
     uint PossibleNear;        // 가능성이 있는 영역의 파티클 중, 카메라에서 가장 가까이 있는 파티클 인덱스
@@ -104,9 +106,20 @@ void main()
 
         // 거리가 n*h 보다 작은 경우
         if( len < n * h )
-            // 가중치를 이용해서, 상대를 향한 벡터를 누적한다
-            //acumVec += (n*h - len) * normalize(MeToYou);
-            acumVec += normalize(MeToYou);
+        {
+            // 내가 바라보는 이웃 파티클 벡터와, 내가 카메라를 바라보는 벡터가 겹친다면
+            // 나는 무조건 가려지는 거니까, 무조건 non - visible 하다
+            vec3 crossVec = cross(normalize(MeToYou), normalize(camPos - vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos)));
+            if( length(crossVec) < controlValue )
+            {
+                // 무조건 non-visible
+                cData[index].visible = 0;
+                return;
+            }
+            else
+                // 가중치를 이용해서, 상대를 향한 벡터를 누적한다
+                acumVec += normalize(MeToYou);
+        }
     }
 
     

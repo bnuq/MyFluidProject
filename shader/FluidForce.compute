@@ -32,7 +32,7 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
     uniform float time;
     uniform float wavePower;
 
-    
+    uniform float controlValue;
 
     //smooth kernel 함수들 => 일단 함수로 쓰고, 나중에 MACRO 로 바꿔보자
     #define PI 3.1415
@@ -101,6 +101,9 @@ struct Particle
 
     vec3 force;
     uint neighbor;
+
+    vec3 surfNormal;
+    uint isSurface;
 };
 layout(std430, binding = 2) buffer ParticleBuffer
 {
@@ -177,10 +180,18 @@ void Update_Fluid_Force(uint myId)
 
     // 압력, 점성에 의한 힘 저장
     pData[myId].force = (PressureForce + ViscosityForce);
+    // surface normal 저장
+    pData[myId].surfNormal = SurfaceNormal;
+    pData[myId].isSurface = 0;
 
-    // surface normal 이 일정 크기 이상이면, 표면 장력을 더한다
+    // surface normal 이 일정 크기 이상인 경우
     if( length(SurfaceNormal) > threshold )
+    {
+        // 표면 장력을 더한다
         pData[myId].force += (-1) * surfCoeffi * SurfaceForceMag * normalize(SurfaceNormal);
+        pData[myId].isSurface = 1;
+    }
+
 }   
 
 
@@ -200,10 +211,10 @@ void Add_Extra_Force(uint myId)
     ExtraForce += vec3(-mouseForce.x, 0, -mouseForce.y) * 1.0;
 
 
-    // // 파도의 의한 힘
-    // vec3 waveF = vec3(0, sin(pData[myId].position.x / xRange * PI + time), 0);
-    // waveF *= (1 - pData[myId].position.y / yRange) * wavePower;
-    // ExtraForce += waveF;
+    // 파도의 의한 힘
+    vec3 waveF = vec3(0, sin(pData[myId].position.x / xRange * PI + time), 0);
+    waveF *= (1 - pData[myId].position.y / yRange) * wavePower;
+    ExtraForce += waveF;
 
     // 추가적인 힘을 더해 저장
     pData[myId].force += ExtraForce;
@@ -222,4 +233,9 @@ void main()
 
     // 2. 영향을 안 받는 힘을 구한다
     Add_Extra_Force(index);
+
+
+    //if(dot( pData[index].surfNormal, vec3(0, 1, 0) ) > controlValue)
+    // if(pData[index].surfNormal.y > -controlValue)
+    //     pData[index].isSurface = 0;
 }

@@ -369,6 +369,9 @@ void Context::Render()
 
         ImGui::DragFloat("visible coeffi", &visibleCoeffi, 0.0001, 1);
         ImGui::DragFloat("visible thre", &visibleThre, 0.0001, 1);
+
+
+        ImGui::DragFloat("controlValue", &controlValue, 0.0001, 1000);
     }
     ImGui::End();
 
@@ -472,6 +475,8 @@ void Context::Get_Force()
         ForceCompute->SetUniform("time", (float)glfwGetTime());
         ForceCompute->SetUniform("wavePower", 3.0f);
 
+        
+
         // 마우스 좌클릭이 없는데, 힘이 있을 때, 힘을 넘기고 힘 초기화
         if(!m_giveForceMouse && (glm::length(mouseForce) != 0))
         {
@@ -509,29 +514,6 @@ void Context::Get_Move()
 
         glDispatchCompute(Particle::GroupNum, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-        // Core Particle 데이터를 읽어온다
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, CoreParticleBuffer->Get());
-            // 연산 결과, Output 을 CPU 로 읽어오고
-            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
-
-            // Camera 까지의 거리를 기준으로 sort
-            std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_toCamera_Compare());
-
-            // 다시 넣어준다
-            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
-
-        // // surface particles 개수를 읽는다
-        // glBindBuffer(GL_SHADER_STORAGE_BUFFER, CountBuffer->Get());
-        //     glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &visibleCount);
-
-        //     SPDLOG_INFO("Surface count is {}", visibleCount);
-
-        //     unsigned int temp = 0;
-        //     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &temp);
-        // glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
     glUseProgram(0);
 }
@@ -579,9 +561,22 @@ void Context::Find_Visible()
         VisibleCompute->SetUniform("visibleThre", visibleThre);
 
         VisibleCompute->SetUniform("camPos", MainCam->Position);
+        VisibleCompute->SetUniform("controlValue", controlValue);
 
         glDispatchCompute(Particle::GroupNum, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        // Core Particle 데이터를 읽어온다
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, CoreParticleBuffer->Get());
+            // 연산 결과, Output 을 CPU 로 읽어오고
+            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
+
+            // Camera 까지의 거리를 기준으로 sort
+            std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_toCamera_Compare());
+
+            // 다시 넣어준다
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, CountBuffer->Get());
             glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &visibleCount);
