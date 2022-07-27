@@ -203,7 +203,7 @@ private:
         float visibleThre   = 3.8f;
 
 
-        float controlValue = 0.1f;
+        float controlValue = 90.0f;
 
     // Program 실행 함수
     void Get_Density_Pressure();

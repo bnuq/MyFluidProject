@@ -49,108 +49,41 @@ layout(std430, binding = 5) buffer CountBuffer
 /* 
     새로운 위치와 새로운 tocamera 값을 가지고 있는 상태
     주변에 파티클이 어떻게 있는 지 확인한다
+
+    자신보다 카메라에 가까운 다른 파티클을 조사
+    혹시 해당 파티클이 자신을 가린다면, 더이상 조사하지 않고 non - visible 하다고 판단
+
+    자신보다 카메라에 가까운 모든 파티클을 조사했는데, 가리지 않는다면
+    visible 하다고 판단한다
  */
 void main()
 {
     // ssbo 에 접근하는 스레드의 인덱스
     uint index = gl_GlobalInvocationID.x;
 
-    
+    vec3 MeToCam = camPos - vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos);
 
-    uint PossibleFar;         // 가능성이 있는 영역의 파티클 중, 카메라에서 가장 멀리 있는 파티클 인덱스
-    uint PossibleNear;        // 가능성이 있는 영역의 파티클 중, 카메라에서 가장 가까이 있는 파티클 인덱스
-    
-    // index => 0 검색, Current Particle 보다 멀리 있는 Particles 를 조사한다
-    for(uint farId = index; farId >= 0; farId--)
+    // 현재 파티클에서, 카메라에 더 가까운 파티클들에 대해서만 조사
+    for(uint neId = index + 1; neId < TotalParticleCount; neId++)
     {
-        if(farId == 0)
-        {
-            PossibleFar = 0;
-            break;
-        }
-        // n*h 보다 멀리 떨어져 있으면 그만 검색
-        if(cData[farId].toCamera >= cData[index].toCamera + n * h)    
-            break;
-        else
-            PossibleFar = farId;
-    }
-
-    // index => particleCount 검색, Current Particle 보다 가까이 있는 Particles 를 조사한다
-    if(cData[index].toCamera - n * h < 0)   // n*h 가 긴 경우 => 모든 파티클을 조사
-        PossibleNear = TotalParticleCount - 1;
-    else
-    {
-        for(uint nearId = index; nearId < TotalParticleCount; nearId++)
-        {
-            if(cData[nearId].toCamera <= cData[index].toCamera - n * h)
-                break;
-            else
-                PossibleNear = nearId;
-        }
-    }
-
-
-    // 상대 파티클을 향한 벡터 => 자신 주변 유체의 중심을 향하게 된다
-    vec3 acumVec = vec3(0, 0, 0);
-    
-    // 이제 검색 범위 내에서, n*h 이내에 존재하는 모든 파티클들을 조사
-    for(uint neId = PossibleFar; neId <= PossibleNear; neId++)
-    {
-        // 자기 자신에 대한 조사는 제외
-        if(neId == index) continue;
-
+        // 코사인 법칙을 이용해서 두 벡터 사이의 각도를 구하자
         // 내가 상대 파티클을 바라보는 벡터
         vec3 MeToYou = vec3(cData[neId].xpos, cData[neId].ypos, cData[neId].zpos) - vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos);
 
-        float len = length(MeToYou);
+        float cosTheta = dot(MeToCam, MeToYou) / ( length(MeToCam) * length(MeToYou) );
 
-        // 거리가 n*h 보다 작은 경우
-        if( len < n * h )
+        // 두 벡터 내적의 크기 => 각이 작을수록 코사인 값이 크다, 1 에 가깝다
+        if( cosTheta * 100 > controlValue )  // 특정 값보다 클 경우, 두 벡터가 너무 가깝다는 뜻
         {
-            // 내가 바라보는 이웃 파티클 벡터와, 내가 카메라를 바라보는 벡터가 겹친다면
-            // 나는 무조건 가려지는 거니까, 무조건 non - visible 하다
-            vec3 crossVec = cross(normalize(MeToYou), normalize(camPos - vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos)));
-            if( length(crossVec) < controlValue )
-            {
-                // 무조건 non-visible
-                cData[index].visible = 0;
-                return;
-            }
-            else
-                // 가중치를 이용해서, 상대를 향한 벡터를 누적한다
-                acumVec += normalize(MeToYou);
+            // 무조건 non-visible
+            cData[index].visible = 0;
+            return; // 종료
         }
     }
 
-    
-
-
-    // 누적 벡터에서, +y 성분은 제거한다
-    if(acumVec.y > 0) acumVec.y = 0;
-
-    // 일단 기본적인 크기로 한번 거른다
-    // 누적 벡터의 길이를 확인 => 한 쪽 성분이 살아 있어서, 길이가 충분히 길다면 외부 = visible
-    if(length(acumVec) > visibleThre)
-    {
-        // // 일단 일정 크기이상의 acumVec 가 있는 파티클들 중에서
-        // // 카메라를 향하는 벡터 이용
-        // vec3 ParticleToCam = camPos - vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos);
-        // if(dot(acumVec, ParticleToCam) > 0)     // non - visible
-        //     cData[index].visible = 0;
-        // else
-        // {
-        //     cData[index].visible = 1;
-        //     atomicAdd(count, 1);
-        // }
-        cData[index].visible = 1;
-        atomicAdd(count, 1);
-    }
-    else
-        cData[index].visible = 0;
-
-
-    // acumVec 와 카메라를 향하는 벡터 2개를 이용
-    
+    // 살아남았으면 visible 하다고 판단
+    cData[index].visible = 1;
+    atomicAdd(count, 1);
     
 }
 

@@ -2,10 +2,10 @@
 
 
 // Fluid 가 존재하는, 영역 => (0, 0, 0) 를 기준으로, xyz 로 길이를 지정
-glm::vec3 Particle::FluidRange = glm::vec3(9,9,9);
+glm::vec3 Particle::FluidRange = glm::vec3(18, 10, 18);
 
 // 한 축을 구성하는 파티클의 개수
-glm::uvec3 Particle::ParticleCount = glm::uvec3(8, 8, 8);
+glm::uvec3 Particle::ParticleCount = glm::uvec3(16, 8, 16);
 
 // 전체 파티클의 개수
 unsigned int Particle::TotalParticleCount = (Particle::ParticleCount.x) * (Particle::ParticleCount.y) * (Particle::ParticleCount.z);

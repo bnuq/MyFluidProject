@@ -372,6 +372,9 @@ void Context::Render()
 
 
         ImGui::DragFloat("controlValue", &controlValue, 0.0001, 1000);
+
+
+        ImGui::Text("Visible Count is %d", visibleCount);
     }
     ImGui::End();
 
@@ -515,6 +518,19 @@ void Context::Get_Move()
         glDispatchCompute(Particle::GroupNum, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
+        
+        // 움직임 => 새로운 위치를 얻고나서, toCamera 값이 바뀌었으므로 정렬을 새로 해준다
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, CoreParticleBuffer->Get());
+            // 연산 결과, Output 을 CPU 로 읽어오고
+            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
+
+            // Camera 까지의 거리를 기준으로 sort
+            std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_toCamera_Compare());
+
+            // 다시 넣어준다
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
     glUseProgram(0);
 }
 
@@ -525,7 +541,7 @@ void Context::Draw_Particles(const glm::mat4& projection, const glm::mat4& view)
     DrawProgram->Use();
   
         // 렌더링 하기 전에, visible 유무로 정렬을 추가로 진행한다
-        std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_visible_Compare());
+        //std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_visible_Compare());
 
         // 정렬된 Core Particle 데이터를 이용해서, 카메라에서 가까운 것 부터 렌더링을 진행
         // surface count 개수 만큼만 그린다
@@ -566,22 +582,19 @@ void Context::Find_Visible()
         glDispatchCompute(Particle::GroupNum, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-        // Core Particle 데이터를 읽어온다
+        // 렌더링하기 위해 Core Particle 데이터를 읽어온다
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, CoreParticleBuffer->Get());
             // 연산 결과, Output 을 CPU 로 읽어오고
             glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
 
-            // Camera 까지의 거리를 기준으로 sort
-            std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_toCamera_Compare());
-
-            // 다시 넣어준다
-            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
+            // Camera + visible 을 기준으로 sort
+            std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_visible_Compare());
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, CountBuffer->Get());
             glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &visibleCount);
 
-            SPDLOG_INFO("visible count {}", visibleCount);
+            //SPDLOG_INFO("visible count {}", visibleCount);
 
             unsigned int temp = 0;
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &temp);
