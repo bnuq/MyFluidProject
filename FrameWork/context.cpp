@@ -448,16 +448,19 @@ void Context::Render()
 
 
 
-    Find_Visible(projection, view);                                     // 5. depth map 을 읽고 ~ 스레드가 담당하는 타일이 depth map 에 저장된 깊이와
+    //Find_Visible(projection, view);                                     // 5. depth map 을 읽고 ~ 스레드가 담당하는 타일이 depth map 에 저장된 깊이와
                                                         // 얼마나 차이가 나는 지를 판단한다
 
 
     // 렌더링을 위한 설정
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    //glBlendFunc(GL_SRC_ALPHA, GL_SRC_ALPHA);
-        Draw_Particles(projection, view);               // 6. 최종적으로 visible particle 들만 렌더링
-    glDisable(GL_BLEND);
+    // glEnable(GL_BLEND);
+    // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    // glBlendFunc(GL_SRC_ALPHA, GL_SRC_ALPHA);
+    //     Draw_Particles(projection, view);               // 6. 최종적으로 visible particle 들만 렌더링
+    // glDisable(GL_BLEND);
+
+
+    
 }
 
 
