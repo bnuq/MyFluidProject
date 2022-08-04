@@ -107,10 +107,6 @@ private:
     std::vector<CoreParticle> CoreParticleArray{};
 
 
-        // 일단 중간중간에 Particle 내용을 확인하기 위해 사용하는 array
-        std::vector<Particle> ParticleArray{};
-
-
     // Core Particle 들의 초기 위치 값을 넣는 함수
     void Init_CoreParticles();
 
