@@ -1,7 +1,7 @@
 #ifndef __CAM_H__
 #define __CAM_H__
 
-#include "common.h"
+#include "../FrameWork/common.h"
 
 
 CLASS_PTR(Camera)

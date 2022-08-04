@@ -2,7 +2,7 @@
 #include <fstream>  // File Stream
 #include <sstream>  // String Stream
 
-// std::optional
+// std::optional => value 를 리턴하면, 자동으로 optional 을 감싸서 리턴한다
 std::optional<std::string> LoadTextFile(const std::string& filename)
 {    
     // ifstream = file loading,  file -> stream
@@ -14,17 +14,15 @@ std::optional<std::string> LoadTextFile(const std::string& filename)
     }
 
     std::stringstream text{};
-
-    // ifstream::rdbuf() => stream buffer 를 리턴 => String Stream
+    // ifstream::rdbuf() => stream buffer 를 리턴 => String Stream 에 넣을 수 있다
     text << fin.rdbuf();
 
-    // stringstream::str() => 버퍼??? ????????? string ??? 리턴
+    // stringstream::str() => 버퍼에 저장된 string 을 리턴
     return text.str();
 }
 
 
-
-// 거리에 따른 빛의 감쇠를 계산
+// 거리에 따른 감쇠 상수들을 리턴
 glm::vec3 GetAttenuationCoeff(float distance)
 {
     const auto linear_coeff = glm::vec4(
@@ -41,5 +39,6 @@ glm::vec3 GetAttenuationCoeff(float distance)
     float kl = glm::dot(linear_coeff, dvec);
     float kq = glm::dot(quad_coeff, dvec);
 
+    // 상수로 이뤄진 벡터를 리턴
     return glm::vec3(kc, glm::max(kl, 0.0f), glm::max(kq*kq, 0.0f));
 }

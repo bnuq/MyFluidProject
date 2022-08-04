@@ -54,6 +54,15 @@ bool Context::Init()
 
 
 
+    // 6. For GPU Instancing
+    SimpelProgram = Program::Create("./shader/Simple/simple.vs", "./shader/Simple/simple.fs");
+    if(!SimpelProgram) return false;
+
+
+    // shadow map
+    depthFrameBuffer = ShadowMap::Create(1024, 1024);
+
+
 
     // 카메라 객체 초기화
     MainCam = Camera::Create();
@@ -70,6 +79,7 @@ bool Context::Init()
 
     // GPU 에서 데이터를 저장할 SSBO 버퍼를 생성
     // Core Particle => 데이터를 복사해서 GPU 에 넣는다
+    // 정렬된 데이터를 넣는다
     CoreParticleBuffer
         = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, CoreParticleArray.data(), sizeof(CoreParticle), CoreParticleArray.size());
 
@@ -111,11 +121,21 @@ bool Context::Init()
         glShaderStorageBlockBinding(MoveCompute->Get(), blockIndex, CoreParticle_Index);
 
 
+    // 3.5 GPU Instancing
+        blockIndex = glGetProgramResourceIndex(SimpelProgram->Get(), GL_SHADER_STORAGE_BUFFER, "CoreParticleBuffer");
+        glShaderStorageBlockBinding(SimpelProgram->Get(), blockIndex, CoreParticle_Index);
+
+
+
+
     // 4. Visible
-        blockIndex = glGetProgramResourceIndex(MoveCompute->Get(), GL_SHADER_STORAGE_BUFFER, "CoreParticleBuffer");
-        glShaderStorageBlockBinding(MoveCompute->Get(), blockIndex, CoreParticle_Index);
-        blockIndex = glGetProgramResourceIndex(MoveCompute->Get(), GL_SHADER_STORAGE_BUFFER, "CountBuffer");
-        glShaderStorageBlockBinding(MoveCompute->Get(), blockIndex, Count_Index);
+        blockIndex = glGetProgramResourceIndex(VisibleCompute->Get(), GL_SHADER_STORAGE_BUFFER, "CoreParticleBuffer");
+        glShaderStorageBlockBinding(VisibleCompute->Get(), blockIndex, CoreParticle_Index);
+        blockIndex = glGetProgramResourceIndex(VisibleCompute->Get(), GL_SHADER_STORAGE_BUFFER, "CountBuffer");
+        glShaderStorageBlockBinding(VisibleCompute->Get(), blockIndex, Count_Index);
+
+
+
 
     // 1. density pressure 확정
     {
@@ -245,8 +265,9 @@ void Context::Init_CoreParticles()
         }
     }
 
-    // 카메라까지의 거리를 기준으로 정렬한다
-    // 멀리 있는 것이 앞으로 온다
+
+    // 카메라까지의 거리를 기준으로 정렬한다 => 멀리 있는 것이 앞으로 온다
+    // 처음부터 아예 정렬을 하고 시작
     std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_toCamera_Compare());
 
 
@@ -377,6 +398,14 @@ void Context::Render()
 
         ImGui::Text("Visible Count is %d", visibleCount);
     }
+
+    // 깊이 맵 확인
+    ImGui::Image((ImTextureID)depthFrameBuffer->GetShadowMap()->Get(), ImVec2(256, 256), ImVec2(0, 1), ImVec2(1, 0));
+    ImGui::DragFloat("cameraNear", &cameraNear, 0.01f, 0);
+    ImGui::DragFloat("cameraFar", &cameraFar, 0.01f, 0);
+
+    ImGui::DragFloat("offset", &offset, 0.01f, 0);
+
     ImGui::End();
 
 
@@ -386,7 +415,7 @@ void Context::Render()
     (
         glm::radians(45.0f),
         (float)m_width / (float)m_height,
-        0.01f, 500.0f
+        cameraNear, cameraFar
     );
 
     auto view = glm::lookAt
@@ -399,18 +428,35 @@ void Context::Render()
     );
 
 
+
+
     // 프로그램 실행
-    Get_Density_Pressure();
-    Get_Force();
-    Get_Move();
-    Find_Visible();
+    Get_Density_Pressure();                             // 1. 먼저 입자의 밀도와 압력 값들을 구하고
+    Get_Force();                                        // 2. 각 입자들의 알짜힘을 구한다
+    Get_Move();                                         // 3. 알짜힘에 맞춰 이동 -> 최종 위치와 속도를 결정
+
+
+    // SimpelProgram->Use();
+
+    //     SimpelProgram->SetUniform("transform", projection * view);
+    //     SimpelProgram->SetUniform("MainColor", glm::vec3(1,1,0));
+
+    //     BoxMesh->GPUInstancingDraw(SimpelProgram.get(), Particle::TotalParticleCount);
+
+    // glUseProgram(0);
+    Draw_GPU_Instancing(projection, view);              // 4. 일단 depth map 에 렌더링을 시행
+
+
+
+    Find_Visible(projection, view);                                     // 5. depth map 을 읽고 ~ 스레드가 담당하는 타일이 depth map 에 저장된 깊이와
+                                                        // 얼마나 차이가 나는 지를 판단한다
 
 
     // 렌더링을 위한 설정
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     //glBlendFunc(GL_SRC_ALPHA, GL_SRC_ALPHA);
-        Draw_Particles(projection, view);
+        Draw_Particles(projection, view);               // 6. 최종적으로 visible particle 들만 렌더링
     glDisable(GL_BLEND);
 }
 
@@ -536,6 +582,83 @@ void Context::Get_Move()
 }
 
 
+void Context::Draw_GPU_Instancing(const glm::mat4& projection, const glm::mat4& view)
+{
+    // 화면에 그리지 않고, shadow map 에 그려서, 카메라에서 봤을 때 각 픽셀 depth 값을 텍스처에 저장한다
+    depthFrameBuffer->Bind();
+        
+        glClear(GL_DEPTH_BUFFER_BIT);
+
+        // view port 설정
+        glViewport
+        (
+            0, 
+            0,
+            depthFrameBuffer->GetShadowMap()->GetWidth(),
+            depthFrameBuffer->GetShadowMap()->GetHeight()
+        );
+
+        SimpelProgram->Use();
+
+            SimpelProgram->SetUniform("transform", projection * view);
+            SimpelProgram->SetUniform("MainColor", glm::vec3(1,1,0));
+
+            BoxMesh->GPUInstancingDraw(SimpelProgram.get(), Particle::TotalParticleCount);
+
+        glUseProgram(0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, m_width, m_height);
+}
+
+
+void Context::Find_Visible(const glm::mat4& projection, const glm::mat4& view)
+{
+    VisibleCompute->Use();
+        // VisibleCompute->SetUniform("h", SmoothKernelRadius);
+        // VisibleCompute->SetUniform("TotalParticleCount", Particle::TotalParticleCount);
+
+        // VisibleCompute->SetUniform("n", visibleCoeffi);
+        // VisibleCompute->SetUniform("visibleThre", visibleThre);
+
+        // VisibleCompute->SetUniform("camPos", MainCam->Position);
+        // VisibleCompute->SetUniform("controlValue", controlValue);
+        // VisibleCompute->SetUniform("ratio", ratio);
+
+
+        // depth map 을 uniform variable 로 넘긴다
+        glActiveTexture(GL_TEXTURE0);
+        depthFrameBuffer->GetShadowMap()->Bind();
+        VisibleCompute->SetUniform("depthMap", 0);
+
+        VisibleCompute->SetUniform("transform", projection * view);
+        VisibleCompute->SetUniform("offset", offset);
+
+
+        glDispatchCompute(Particle::GroupNum, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        // 렌더링하기 위해 Core Particle 데이터를 읽어온다
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, CoreParticleBuffer->Get());
+            // 연산 결과, Output 을 CPU 로 읽어오고
+            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
+
+            // Camera + visible 을 기준으로 sort
+            std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_visible_Compare());
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, CountBuffer->Get());
+            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &visibleCount);
+
+            //SPDLOG_INFO("visible count {}", visibleCount);
+
+            unsigned int temp = 0;
+            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &temp);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    glUseProgram(0);
+}
+
+
+
 void Context::Draw_Particles(const glm::mat4& projection, const glm::mat4& view)
 {
     // output 버퍼에 저장된 데이터를 이용해서, Particles 를 그린다
@@ -567,40 +690,4 @@ void Context::Draw_Particles(const glm::mat4& projection, const glm::mat4& view)
 }
 
 
-
-void Context::Find_Visible()
-{
-    VisibleCompute->Use();
-        VisibleCompute->SetUniform("h", SmoothKernelRadius);
-        VisibleCompute->SetUniform("TotalParticleCount", Particle::TotalParticleCount);
-
-        VisibleCompute->SetUniform("n", visibleCoeffi);
-        VisibleCompute->SetUniform("visibleThre", visibleThre);
-
-        VisibleCompute->SetUniform("camPos", MainCam->Position);
-        VisibleCompute->SetUniform("controlValue", controlValue);
-        VisibleCompute->SetUniform("ratio", ratio);
-
-        glDispatchCompute(Particle::GroupNum, 1, 1);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-        // 렌더링하기 위해 Core Particle 데이터를 읽어온다
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, CoreParticleBuffer->Get());
-            // 연산 결과, Output 을 CPU 로 읽어오고
-            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
-
-            // Camera + visible 을 기준으로 sort
-            std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_visible_Compare());
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, CountBuffer->Get());
-            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &visibleCount);
-
-            //SPDLOG_INFO("visible count {}", visibleCount);
-
-            unsigned int temp = 0;
-            glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(unsigned int), &temp);
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-    glUseProgram(0);
-}
 

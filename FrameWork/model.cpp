@@ -1,6 +1,14 @@
 #include "model.h"
 
 /* PUBLIC */
+/* 
+    자세하게는 잘 모르겠지만, assimp library 를 이용
+    모델 파일 
+        => 정점 배열과 인덱스 배열을 읽어오고
+        => Mesh 를 만든다
+        => VBO, EBO 를 채운다
+        => 연결된 Material 이 있으면 Material 까지 읽어온다
+ */
 ModelUPtr Model::Load(const std::string& filename)
 {
     auto model = ModelUPtr(new Model());
@@ -11,10 +19,13 @@ ModelUPtr Model::Load(const std::string& filename)
 
 void Model::Draw(const Program* program) const
 {
-    for (auto& mesh: m_meshes) {
+    for (auto& mesh: m_meshes)
+    {
+        // 주어진 program 에서 가지고 있는 Mesh 들을 하나하나 렌더링
         mesh->Draw(program);
     }
 }
+
 
 /* PRIVATE */
 bool Model::LoadByAssimp(const std::string& filename)

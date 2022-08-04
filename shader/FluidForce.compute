@@ -214,6 +214,8 @@ void Add_Extra_Force(uint myId)
     // 파도의 의한 힘
     vec3 waveF = vec3(0, sin(pData[myId].position.x / xRange * PI + time), 0);
     waveF *= (1 - pData[myId].position.y / yRange) * wavePower;
+    
+    
     ExtraForce += waveF;
 
     // 추가적인 힘을 더해 저장

@@ -1,7 +1,7 @@
 #ifndef __PARTICLE_H__
 #define __PARTICLE_H__
 
-#include "common.h"
+#include "../FrameWork/common.h"
 
 
 // CPU -> GPU 사이로 주고 받는 데이터 형식, 꼭 필요한 것만 넣었다

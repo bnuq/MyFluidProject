@@ -5,14 +5,14 @@
 #include "shader.h"
 
 /* 
-    Program ?겢?옒?뒪
-        GL program object 瑜? 愿?由?
+    Program 클래스
+        GL program object 를 관리
     
     GL program
-        ?뿬?윭 媛쒖쓽 而댄뙆?씪 ?맂 shader ?뱾?쓣 ?빀爾먮넃??? 寃?
-        programmable, ?궡媛? ?닔?젙?븷 ?닔 ?엳?뒗 ?뀺?씠?뜑?뱾?쓣 紐⑥븘?넃?븯?떎
-        ?뼱?뼡 ?뀺?씠?뜑瑜? ?궗?슜?븷 吏? 寃곗젙?븷 ?닔 ?엳?떎
-        ?뀺?씠?뜑?뱾?뿉 ?뱾?뼱媛??뒗 Uniform 愿?由?
+        여러 개의 컴파일 된 shader 들을 합쳐놓은 것
+        programmable, 내가 수정할 수 있는 셰이더들을 모아놓았다
+        어떤 셰이더를 사용할 지 결정할 수 있다
+        셰이더들에 들어가는 Uniform 관리
  */
 CLASS_PTR(Program)
 class Program
@@ -22,23 +22,22 @@ public:
     static ProgramUPtr Create(const std::string& vertShaderFilename, const std::string& fragShaderFilename);
     ~Program();
     /* 
-        愿?由ы븯怨? ?엳?뒗 GL program ?쓣 ?궗?슜?븯怨? ?떢?쓣 ?븣 ?궗?슜
-            GL program ?씠?씪?뒗 寃껋??, 而댄뙆?씪 ?맂 ?뀺?씠?뜑?뱾?쓣 紐⑥븘?넃??? 寃?
-            利?, ?궡媛? ?옉?꽦?븳 ?뼱?뼡 ?뀺?씠?뜑?뱾?쓣 ?궗?슜?븯怨? ?떢?쓣 ?븣 ?샇異?
+        관리하고 있는 GL program 을 사용하고 싶을 때 사용
+            GL program 이라는 것은, 컴파일 된 셰이더들을 모아놓은 것
+            즉, 내가 작성한 어떤 셰이더들을 사용하고 싶을 때 호출
      */    
     void Use() const;
 
     // Return GL program handle id
     uint32_t Get() const { return m_program; }
     /* 
-        shader ?뿉 uniform 蹂??닔瑜? ?꽆湲곕뒗 ?븿?닔?뱾
-        ?꽆湲곕뒗 Uniform 蹂??닔?뿉 留욊쾶 function overloading
+        shader 에 uniform 변수를 넘기는 함수들
+        넘기는 Uniform 변수에 맞게 function overloading
 
-        Uniform 蹂??닔?쓽 ?씠由? 臾몄옄?뿴?쓣 ?넻?빐?꽌 ?젒洹쇳븳?떎
+        Uniform 변수의 이름 문자열을 통해서 접근한다
      */
-    void SetUniform(const std::string& name, unsigned int value) const;
     void SetUniform(const std::string& name, int value) const;
-    void SetUniform(const std::string& name, bool value) const;
+    void SetUniform(const std::string& name, unsigned int value) const;
     void SetUniform(const std::string& name, float value) const;
 
     void SetUniform(const std::string& name, const glm::vec2& value) const;
@@ -49,7 +48,7 @@ public:
 
 private:
     Program() {}
-    // compile ?븳 GL shader ?뱾?쓣 Link => ?삩?쟾?븳 GL program ?쓣 留뚮뱺?떎
+    // compile 한 GL shader 들을 Link => 온전한 GL program 을 만든다
     bool Link(const std::vector<ShaderPtr>& shaders);
 
     // Program Object id

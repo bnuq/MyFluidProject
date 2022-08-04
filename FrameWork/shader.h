@@ -10,11 +10,7 @@ public:
     static ShaderUPtr CreateFromFile(const std::string& filename, GLenum shaderType);
     ~Shader();
 
-    uint32_t Get() const
-    {
-        
-        return m_shader;
-    }   // GL shader obj handle id
+    uint32_t Get() const { return m_shader; }   // GL shader obj handle id
 
 private:
     Shader() {}

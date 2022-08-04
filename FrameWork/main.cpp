@@ -11,6 +11,9 @@
 
 
 
+/* 
+    GLFW 가 CallBack 으로 사용하는 함수들을 정의
+ */
 void OnFramebufferSizeChange(GLFWwindow* window, int width, int height)
 {
     SPDLOG_INFO("framebuffer size changed: ({} x {})", width, height);
@@ -102,12 +105,10 @@ int main(int argc, const char** argv)
     SPDLOG_INFO("OpenGL context version: {}", glVersion);
 
 
-    // imgui initialization
-    // OpenGL context ??? ???????????? ??? ???, ImGUI ??? ??????????????? ???????
     auto imguiContext = ImGui::CreateContext();     // imgui context
-    ImGui::SetCurrentContext(imguiContext);         // current ??? ???????
+    ImGui::SetCurrentContext(imguiContext);
 
-    ImGui_ImplGlfw_InitForOpenGL(window, false);    // callback ??? ?????? ?????????? false => ??????????????????
+    ImGui_ImplGlfw_InitForOpenGL(window, false);   
     ImGui_ImplOpenGL3_Init();
     ImGui_ImplOpenGL3_CreateFontsTexture();
     ImGui_ImplOpenGL3_CreateDeviceObjects();
@@ -122,49 +123,39 @@ int main(int argc, const char** argv)
     }
 
     
+    // 유저 포인터 사용, 특정 윈도우에 붙어있는 포인터를 가져다 쓸 수 있다
     glfwSetWindowUserPointer(window, context.get());
 
+
+    // 뷰포트 생성, 자동으로 호출되지 않으므로 처음 호출은 직접 한다
     OnFramebufferSizeChange(window, WINDOW_WIDTH, WINDOW_HEIGHT);
 
+
+    // GLFW CallBack 을 윈도우에 등록한다
     glfwSetFramebufferSizeCallback(window, OnFramebufferSizeChange);
-
     glfwSetKeyCallback(window, OnKeyEvent);
-    	
     glfwSetCharCallback(window, OnCharEvent);
-
-    glfwSetCursorPosCallback(window, OnCursorPos);
-    	
+    glfwSetCursorPosCallback(window, OnCursorPos);	
     glfwSetMouseButtonCallback(window, OnMouseButton);
-
     glfwSetScrollCallback(window, OnScroll);
 
 
-    double prevTime {}, curTime {};
-    prevTime = glfwGetTime();
-
     while (!glfwWindowShouldClose(window))
-    {
-        curTime = glfwGetTime();       
-        // 60FPS Rendering 
-        if(curTime - prevTime >= 0.008)
-        {
-            
-            glfwPollEvents();
+    {    
+        glfwPollEvents();
 
-            ImGui_ImplGlfw_NewFrame();
-            ImGui::NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
 
-            context->ProcessInput(window);
-            context->Render();
+        context->ProcessInput(window);
+        context->Render();
 
-            ImGui::Render();
-            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-            // Double Buffering, Frame Buffer Swap
-            glfwSwapBuffers(window);
+        // Double Buffering, Frame Buffer Swap
+        glfwSwapBuffers(window);
 
-            prevTime = curTime;
-        }
     }
 
 

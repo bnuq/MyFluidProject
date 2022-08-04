@@ -3,20 +3,13 @@
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 
-uniform float h;
+// depth map
+uniform sampler2D depthMap;             // 카메라에서 본, 깊이 맵
 
-uniform uint TotalParticleCount;
+uniform mat4 transform;                 // 월드 -> 카메라 클립 공간 변환
 
-// 1 이상, 검색 범위를 지정하는 인자
-uniform float n;
+uniform float offset;                   // particle 와 텍스처의 깊이를 비교할 값
 
-// visible 을 결정하는 threshold, 이거 보다 커야 visible 하다
-uniform float visibleThre;
-
-uniform vec3 camPos;
-
-uniform float controlValue;
-uniform float ratio;
 
 struct CoreParticle
 {
@@ -45,84 +38,39 @@ layout(std430, binding = 5) buffer CountBuffer
 };
 
 
-
-/* 
-    새로운 위치와 새로운 toCamera 값을 가지고 있는 상태
-    주변에 파티클이 어떻게 있는 지 확인한다
-
-    자신보다 카메라에 가까운 다른 파티클을 조사
-    혹시 해당 파티클이 자신을 가린다면, 더이상 조사하지 않고 non - visible 하다고 판단
-
-    자신보다 카메라에 가까운 모든 파티클을 조사했는데, 가리지 않는다면
-    visible 하다고 판단한다
- */
 void main()
 {
     // ssbo 에 접근하는 스레드의 인덱스
     uint index = gl_GlobalInvocationID.x;
 
-    // 가장 짧은 to camera
-    float shortestToCamera = cData[TotalParticleCount - 1].toCamera;
-    float longestToCamera = cData[0].toCamera;
-    // [0, 1]
-    float myToCameraRatio = (cData[index].toCamera - shortestToCamera) / (longestToCamera - shortestToCamera);
-    //float myToCameraRatio = (longestToCamera - cData[index].toCamera) / (longestToCamera - shortestToCamera);
 
-    vec3 MeToCam = camPos - vec3(cData[index].xpos, cData[index].ypos, cData[index].zpos);
+    // Core Particle 의 중심점이, 카메라 클립 공간으로 변환됐다고 가정했을 때
+    // 카메라 클립 공간 내에서의 좌표
+    vec4 ClipPos = transform * vec4(cData[index].xpos, cData[index].ypos, cData[index].zpos, 1.0);
 
-    // 현재 파티클에서, 카메라에 더 가까운 파티클들에 대해서만 조사
-    for(uint neId = index + 1; neId < TotalParticleCount; neId++)
+    // 클립 공간 좌표로 부터, depth map 의 텍스처 좌표를 얻을 수 있다
+    vec3 depthMapCoord = ClipPos.xyz / ClipPos.w;
+    depthMapCoord = depthMapCoord * 0.5 + 0.5;
+
+
+    float closestDepth = texture(depthMap, depthMapCoord.xy).r;
+    float currentDepth = depthMapCoord.z;
+
+
+    /* 
+        depth map 에는 앞면만 남으니까
+        particle 의 위치보다 조금 더 앞선 fragment 만 남게 된다
+        따라서
+        일단 closestDepth < currentDepth 이고
+        currentDepth - closestDepth 가 offset 보다 작으면 visible 하다고 하자
+     */
+
+    if(closestDepth < currentDepth &&
+       currentDepth - closestDepth < offset)
     {
-        // 코사인 법칙을 이용해서 두 벡터 사이의 각도를 구하자
-        // 내가 상대 파티클을 바라보는 벡터
-        vec3 MeToYou = vec3(cData[neId].xpos, cData[neId].ypos, cData[neId].zpos) - vec3(cData[index].xpos, cData[index]
-        .ypos, cData[index].zpos);
-
-        // [-1, +1] 사이의 값
-        float cosTheta = dot(MeToCam, MeToYou) / ( length(MeToCam) * length(MeToYou) );
-        // [0, pi] 사이의 각도를 갖는다
-        float theta = acos(cosTheta);
-
-        // 파티클이 멀리 있을수록 limit angle 의 크기가 작다
-        float limitAngle = controlValue - myToCameraRatio * ratio;
-        
-        // 각도가 limit angle 보다 작다 => 겹친다 => 안보인다
-        if( theta < limitAngle )
-        //if( cosTheta * 1000 > controlValue - myToCameraRatio)
-        {
-            // 무조건 non-visible
-            cData[index].visible = 0;
-            return; // 종료
-        }
+        cData[index].visible = 1;
+        atomicAdd(count, 1);
     }
-
-    // 살아남았으면 visible 하다고 판단
-    cData[index].visible = 1;
-    atomicAdd(count, 1);
-    
+    else
+        cData[index].visible = 0;
 }
-
-
-
-/* 
-    키보드 테스트 환경 하나둣셋
-
-    이정도 소음이면 솔직히 괜찮지 않은가??
-    거기서 들으면 훨씬 시끄러울려나
-    그래도 내가 이렇게 조용하게 치면 괜찮지 않을까??
-    아~~ 애매하네 또 막상 하련니까 좀 시끄러운 거 같기도 하고 그러니까
-    괜히 더 불안하네
-
-
-    흔드리지는 않는데 뭐 나름 괜찮아
-    이정도 사각거리는 건 괜찮게 봐주지 않을까??
-    
-        일단 탭 누를 떄 편해서 좋다
-        ㅇㄹㅇ하가 가능>??? ㅆㄲㄴ ㅇㄹㅇㄹㅇ르ㅜ,ㅡㅟㅔㅐ
-
-    근데 너무 부들거리긴 해서, 약간 손에 힘이 들어가게 되네
-    이거는 어쩔 수 없고 대신에 부드러우니까~ 좋구만
-    
-    구름위를 떠 다니듯이 쓰는 느낌으로
-    이정도 소음이면 음악소리보다 작을 거 같은데
-*/

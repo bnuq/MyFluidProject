@@ -10,11 +10,11 @@
 #include "common.h"
 #include "program.h"
 #include "mesh.h"
-#include "framebuffer.h"
+#include "shadow_map.h"
 
 
-#include "Camera.h"
-#include "Particle.h"
+#include "../Src/Camera.h"
+#include "../Src/Particle.h"
 
 
 CLASS_PTR(Context)
@@ -88,6 +88,8 @@ private:
     ProgramUPtr ForceCompute;               // 입자의 알짜힘 계산
     ProgramUPtr MoveCompute;                // 유체 움직이기
     ProgramUPtr VisibleCompute;             // 보이는 것 결정하기
+
+    ProgramUPtr SimpelProgram;              // 단색으로 칠하는 simple program
     ProgramUPtr DrawProgram;                // 유체 그리기
 
 
@@ -187,7 +189,7 @@ private:
         float deltaTime = 0.008f;
 
         // 6. Damping
-        float damping   = 0.8f;
+        float damping   = 0.01f;
 
         // 7. Visible
         // unsigned int neighborLevel = 4;
@@ -210,12 +212,20 @@ private:
     void Get_Density_Pressure();
     void Get_Force();
     void Get_Move();
-    void Find_Visible();
+    void Find_Visible(const glm::mat4& projection, const glm::mat4& view);
     void Draw_Particles(const glm::mat4& proj, const glm::mat4& view);
+    // GPU Instancing 을 통해서, 여러 파티클들을 한번에 그리는 함수
+    // Simple Program 이용
+    void Draw_GPU_Instancing(const glm::mat4& proj, const glm::mat4& view);
 
 
-
+    // 카메라 입장에서 깊이 값을 먼저 그리는 shadow map
+    ShadowMapPtr depthFrameBuffer{};
+    float cameraNear= 15.0f;
+    float cameraFar = 80.0f;
     
+
+    float offset = 0.015f;
 };
 
 #endif // __CONTEXT_H__
