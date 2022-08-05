@@ -29,7 +29,7 @@ float W_Poly6(float r2) { return (315.0 / (64 * PI * pow(abs(h), 9.0) ) ) * pow(
 
 /*
     입력 : Core Particle Buffer
-        파티클 ~ 카메라 거리, toCamera 값으로 정렬되어 있는 버퍼
+        원점 -> 파티클 거리, toOrigin 값으로 정렬되어 있는 버퍼
         Far -> Near 순서로 정렬
 
     [Core Particle]           [Particle]
@@ -42,7 +42,7 @@ float W_Poly6(float r2) { return (315.0 / (64 * PI * pow(abs(h), 9.0) ) ) * pow(
     -                 =>      density           4
     -                         pressure          4
 
-    toCamera
+    toOrigin
                               -
                               neighbor          4
 
@@ -59,7 +59,7 @@ struct CoreParticle
     float yvel;
     float zvel;
 
-    float toCamera;
+    float toOrigin;
 };
 layout(std430, binding = 1) buffer CoreParticleBuffer
 {
@@ -134,20 +134,20 @@ void main()
             PossibleFar = 0;
             break;
         }
-        if(cData[farId].toCamera >= cData[index].toCamera + h)    
+        if(cData[farId].toOrigin >= cData[index].toOrigin + h)    
             break;
         else
             PossibleFar = farId;
     }
 
     // index => particleCount 검색, Current Particle 보다 가까이 있는 Particles 를 조사한다
-    if(cData[index].toCamera - h < 0)   // h 가 긴 경우 => 모든 파티클을 조사
+    if(cData[index].toOrigin - h < 0)   // h 가 긴 경우 => 모든 파티클을 조사
         PossibleNear = TotalParticleCount - 1;
     else
     {
         for(uint nearId = index; nearId < TotalParticleCount; nearId++)
         {
-            if(cData[nearId].toCamera <= cData[index].toCamera - h)
+            if(cData[nearId].toOrigin <= cData[index].toOrigin - h)
                 break;
             else
                 PossibleNear = nearId;

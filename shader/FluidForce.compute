@@ -71,7 +71,7 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 /*
     여전히 정렬이 보장된 ParticleBuffer
-        파티클 ~ 카메라 거리, toCamera 값으로 정렬
+        (파티클 ~ 원점) 거리, toOrigin 값으로 정렬
         Far -> Near 순서로 정렬
 
     position;                   position

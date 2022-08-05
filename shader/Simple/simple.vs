@@ -13,7 +13,7 @@ struct CoreParticle
     float yvel;
     float zvel;
 
-    float toCamera;
+    float toOrigin;
 };
 layout(std430, binding = 1) buffer CoreParticleBuffer
 {

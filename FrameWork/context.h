@@ -60,22 +60,6 @@ private:
     bool m_cameraControl { false };
 
 
-    // 빛, 라이트
-    struct Light
-    {
-        glm::vec3 position { glm::vec3(1.0f, 4.0f, 4.0f) };
-
-        glm::vec3 direction{ glm::vec3(-1.0f, -1.0f, -1.0f) };
-        glm::vec2 cutoff { glm::vec2(120.0f, 5.0f) };
-        
-        glm::vec3 ambient { glm::vec3(0.1f, 0.1f, 0.1f) };
-        glm::vec3 diffuse { glm::vec3(0.5f, 0.5f, 0.5f) };
-        glm::vec3 specular { glm::vec3(1.0f, 1.0f, 1.0f) };
-
-        float distance { 128.0f };
-    };
-    Light m_light;
-
 
 
 
@@ -106,17 +90,15 @@ private:
 
 
 
-    // Core Particle ~ 카메라 까지의 거리로 정렬하는 function object
-    struct CoreParticle_toCamera_Compare
+    // Core Particle ~ 원점 까지의 거리를 기준으로 정렬하는 function object
+    struct CoreParticle_Compare
     {
         bool operator()(const CoreParticle& p1, const CoreParticle& p2)
         {
             // 오로지 파티클 ~ 카메라 사이의 거리를 기준으로 정렬
-            return p1.toCamera > p2.toCamera;
+            return p1.toOrigin > p2.toOrigin;
         }
     };
-    CoreParticle_toCamera_Compare cpCompare{};
-
 
 
     /*  
@@ -132,39 +114,40 @@ private:
 
     // 각 프로그램에서 필요로 하는 Uniform Variables
     // 1. Smooth Kernel
-        float SmoothKernelRadius = 1.0f;
+        float SmoothKernelRadius = 1.5f;
         
     // 2. Pressure Data
         struct PressureData
         {
-            float gasCoeffi   = 0.001f;
-            float restDensity = 50.0f;
+            float gasCoeffi   = 100.0f;
+            float restDensity = 0.01f;
         };
         PressureData PD;
 
     // 3. Viscosity
-        float viscosity       = 1.0f;
+        float viscosity       = 10.0f;
 
     // 4. Surface
-        float surfThreshold   = 0.1f;
-        float surfCoeffi      = 0.1f;
+        float surfThreshold   = 0.01f;
+        float surfCoeffi      = 50.0f;
 
     // 5. Gravity
         glm::vec3 gravityAcel = glm::vec3(0.0f, -10.0f, 0.0f);
     
     // 6. Wave Power
-        float wavePower = 3.0f;
+        float wavePower = 0.0f;
 
     // 7. Delta Time
-        float deltaTime = 0.008f;
+        float deltaTime = 0.016f;
 
     // 8. Damping
-        float damping   = 0.01f;
+        float damping   = 0.95f;
 
     // 9. 렌더링할 때 프레그먼트와 픽셀 사이 깊이 값 비교 오차
         float offset = 0.001f;
 
-
+    // 10. Alpha Offset
+        float alphaOffset = 0.4f;
 
 
     // Program 실행 함수
@@ -179,8 +162,8 @@ private:
 
     // 4 => 카메라 입장에서 깊이 값을 먼저 그리는 shadow map
     ShadowMapPtr depthFrameBuffer{};
-    float cameraNear= 15.0f;
-    float cameraFar = 80.0f;
+    float cameraNear= 20.0f;
+    float cameraFar = 200.0f;
     
 
     

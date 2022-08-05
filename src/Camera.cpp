@@ -6,6 +6,7 @@ CameraPtr Camera::Create()
     return camera;
 }
 
+
 // 카메라 회전, 마우스 입력에 따라서 카메라 좌표계와 direction 벡터가 회전한다
 void Camera::Rotate(glm::vec2 deltaPos)
 {

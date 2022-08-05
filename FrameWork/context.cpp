@@ -66,7 +66,7 @@ bool Context::Init()
     BoxMesh = Mesh::CreateBox();
 
 
-
+    
 
 
     // Core Particles 의 초기 정보를 초기화 한다
@@ -123,9 +123,9 @@ bool Context::Init()
         glShaderStorageBlockBinding(MakeDepthMap->Get(), blockIndex, CoreParticle_Index);
 
 
-    // 5. Rendering         => Particle 데이터 사용, 왜냐하면 다른 여러가지 결과물이 필요하니까?
-        blockIndex = glGetProgramResourceIndex(DrawProgram->Get(), GL_SHADER_STORAGE_BUFFER, "ParticleBuffer");
-        glShaderStorageBlockBinding(DrawProgram->Get(), blockIndex, Particle_Index);
+    // 5. Rendering         => Core Particle 사용
+        blockIndex = glGetProgramResourceIndex(DrawProgram->Get(), GL_SHADER_STORAGE_BUFFER, "CoreParticleBuffer");
+        glShaderStorageBlockBinding(DrawProgram->Get(), blockIndex, CoreParticle_Index);
 
 
 
@@ -155,8 +155,7 @@ void Context::Init_CoreParticles()
                 ( 
                     CoreParticle
                     (
-                        glm::vec4(xStride * xCount, yStride * yCount, zStride * zCount, 1.0f),
-                        MainCam->Position
+                        glm::vec3(xStride * xCount, yStride * yCount, zStride * zCount)
                     )
                 );
             }
@@ -166,7 +165,7 @@ void Context::Init_CoreParticles()
 
     // 카메라까지의 거리를 기준으로 정렬한다 => 멀리 있는 것이 앞으로 온다
     // 처음부터 아예 정렬을 하고 시작
-    std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), cpCompare);
+    std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_Compare());
 }
 
 
@@ -261,27 +260,27 @@ void Context::Render()
     if(ImGui::Begin("Smooth Kernel"))
     {
         // 1. Smmoth Kernel
-            ImGui::DragFloat("Smooth Kernel Radius", &SmoothKernelRadius, 0.001f, 0.01f);
+            ImGui::DragFloat("Smooth Kernel Radius", &SmoothKernelRadius, 0.01f, 0.01f);
 
         // Particle Data
-            ImGui::DragFloat("particle mass", &Particle::ParticleMass, 0.001f, 0.0f);
+            ImGui::DragFloat("particle mass", &Particle::ParticleMass, 0.01f, 0.0f);
 
         // 2. Pressure
-            ImGui::DragFloat("Gas Coeffi", &PD.gasCoeffi);
-            ImGui::DragFloat("Gas RestDensity", &PD.restDensity);
+            ImGui::DragFloat("Gas Coeffi", &PD.gasCoeffi, 1.0f, 0);
+            ImGui::DragFloat("Gas RestDensity", &PD.restDensity, 0.001f, 0);
 
         // 3. Viscosity
             ImGui::DragFloat("viscosity", &viscosity);
 
         // 4. Surface
             ImGui::DragFloat("surfThreshold", &surfThreshold, 0.001f, 0.0f);
-            ImGui::DragFloat("surfCoeffi", &surfCoeffi, 0.001f, 0.0f);
+            ImGui::DragFloat("surfCoeffi", &surfCoeffi, 0.01f, 0.0f);
 
         // 5. Gravity
             ImGui::DragFloat4("gravityAcel", glm::value_ptr(gravityAcel));
 
         // 6. Wave Poser
-            ImGui::DragFloat("wavePower", &wavePower);
+            ImGui::DragFloat("wavePower", &wavePower, 1.0f, 0);
 
         // 7. Delta Time
             ImGui::DragFloat("deltaTime", &deltaTime);
@@ -290,15 +289,20 @@ void Context::Render()
             ImGui::DragFloat("damping", &damping);
 
         // 9. Renderings
-            ImGui::DragFloat("offset", &offset, 0.01f, 0);
+            ImGui::DragFloat("offset", &offset, 0.001f, 0);
+
+        // 10. Alpha Offset
+            ImGui::DragFloat("alphaOffset", &alphaOffset, 0.01f, 0.0f, 1.0f);
     }
 
     // 깊이 맵 확인
     ImGui::Image((ImTextureID)depthFrameBuffer->GetShadowMap()->Get(), ImVec2(256, 256), ImVec2(0, 1), ImVec2(1, 0));
-    ImGui::DragFloat("cameraNear", &cameraNear, 0.01f, 0);
-    ImGui::DragFloat("cameraFar", &cameraFar, 0.01f, 0);
+    ImGui::DragFloat("cameraNear", &cameraNear, 1.0f, 0);
+    ImGui::DragFloat("cameraFar", &cameraFar, 1.0f, 0);
 
 
+
+    ImGui::DragFloat3("Camera Position", glm::value_ptr(MainCam->Position));
 
     ImGui::End();
 
@@ -327,6 +331,7 @@ void Context::Render()
     // 프로그램 실행
     Get_Density_Pressure();                             // 1. 먼저 입자의 밀도와 압력 값들을 구하고
     Get_Force();                                        // 2. 각 입자들의 알짜힘을 구한다
+
     Get_Move();                                         // 3. 알짜힘에 맞춰 이동 -> 최종 위치와 속도를 결정
 
     Make_Depth_Map(projection, view);                   // 4. 일단 Depth map 에 렌더링 => Depth Map 을 생성하고
@@ -357,19 +362,6 @@ void Context::Get_Density_Pressure()
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
 
-        // // output 인 Particle data 를 확인
-        //     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ParticleBuffer->Get());
-        //         glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * ParticleArray.size(), ParticleArray.data());
-
-        //         SPDLOG_INFO("Density Pressure Compute");
-        //         // 일단 로그로 확인하자
-        //         for(unsigned int i = 0; i < Particle::TotalParticleCount; i++)
-        //         {
-        //             SPDLOG_INFO("{} th neighbor {}", i, ParticleArray[i].neighbor);
-        //             SPDLOG_INFO("*** *** *** ***");
-        //         }
-
-        //     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     glUseProgram(0);
 }
 
@@ -416,8 +408,10 @@ void Context::Get_Force()
         // Total Time
         ForceCompute->SetUniform("time", (float)glfwGetTime());
 
+
         glDispatchCompute(Particle::GroupNum, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
 
     glUseProgram(0);
 }
@@ -437,8 +431,6 @@ void Context::Get_Move()
         // Collision
             MoveCompute->SetUniform("damping", damping);
 
-        // Camera
-            MoveCompute->SetUniform("CameraPos", MainCam->Position);
 
         glDispatchCompute(Particle::GroupNum, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
@@ -451,15 +443,12 @@ void Context::Get_Move()
             glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
 
             // Camera 까지의 거리를 기준으로 sort
-            std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_toCamera_Compare());
-
-            SPDLOG_INFO("{}, {}, {}", CoreParticleArray[0].xvel, CoreParticleArray[0].yvel, CoreParticleArray[0].zvel);
+            std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_Compare());
 
             // 다시 넣어준다 => 다음 프레임 때 input 으로 사용한다
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
 
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
 
     glUseProgram(0);
 }
@@ -517,7 +506,8 @@ void Context::Draw_Particles(const glm::mat4& projection, const glm::mat4& view)
             DrawProgram->SetUniform("depthMap", 0);
 
             DrawProgram->SetUniform("offset", offset);
-            
+            DrawProgram->SetUniform("alphaOffset", alphaOffset);           
+            DrawProgram->SetUniform("CameraDir", MainCam->DirVec);
             
         BoxMesh->GPUInstancingDraw(DrawProgram.get(), Particle::TotalParticleCount);
 
