@@ -12,7 +12,7 @@ class CoreParticle
     CoreParticle(glm::vec3 pos, glm::vec3 camPos)
     {
         xpos = pos.x; ypos = pos.y; zpos = pos.z; 
-        xvel = 0.0f;  yvel = 0.0f;  zvel = 0.0f;
+        xvel = 0.0f;  yvel = -1.0f;  zvel = 0.0f;
 
         toCamera = glm::distance(camPos, pos);
     }

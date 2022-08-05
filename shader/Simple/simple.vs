@@ -14,8 +14,6 @@ struct CoreParticle
     float zvel;
 
     float toCamera;
-
-    uint visible;
 };
 layout(std430, binding = 1) buffer CoreParticleBuffer
 {
@@ -30,6 +28,7 @@ void main()
     // 현재 정점이 속한 Core Particle Instance 번호로 접근
     // 자신이 속한 Core Particle 의 정보를 얻는다
     CoreParticle curParticle = cData[gl_InstanceID];
+
 
     // 모델 좌표계 -> 월드 좌표계, 변환
     mat4 modelTransform = mat4(

@@ -8,7 +8,7 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 // Particle Data
     uniform float particleMass;
-    uniform uint particleCount;
+    uniform uint TotalParticleCount;
     uniform float xRange;
     uniform float yRange;
 
@@ -117,11 +117,12 @@ layout(std430, binding = 2) buffer ParticleBuffer
 
 
 
-// force => 주변에 영향을 받는 힘을 구한다
+// 주변 Particles 의 영향을 받는 힘을 구하는 함수
 void Update_Fluid_Force(uint myId)
 {
     // force 초기화
     pData[myId].force = vec3(0.0, 0.0, 0.0);
+
 
     vec3 PressureForce    = vec3(0.0, 0.0, 0.0);        // 압력에 의한 힘
     vec3 ViscosityForce   = vec3(0.0, 0.0, 0.0);        // 점성에 의한 힘
@@ -129,12 +130,18 @@ void Update_Fluid_Force(uint myId)
     vec3 SurfaceNormal    = vec3(0.0, 0.0, 0.0);        // 표면->유체 를 향하는 벡터
     float SurfaceForceMag = 0.0;                        // 표면장력 크기
 
+
     // 탐색한 이웃의 수를 체크, neighbor 에 자기 자신이 포함되어 있으므로 1 로 초기화
+    // 힘을 구할 때는, 자기 자신에 대해서는 계산하지 않는다
     uint countCheck = 1;
 
     // range 범위를 조사, far->near
     for(uint neId = pData[myId].range.x; neId <= pData[myId].range.y; neId++)
     {
+        // 자기 자신에 대한 계산은 하지 않는다
+        if(neId == myId) continue;
+
+
         // 논문의 내용을 그대로 적용 => 상대->나, 방향의 벡터를 사용한다
         vec3 relativePos = pData[myId].position.xyz - pData[neId].position.xyz;
         float rSquare = dot(relativePos, relativePos);
@@ -179,13 +186,15 @@ void Update_Fluid_Force(uint myId)
             SurfaceForceMag += particleMass / pData[neId].density * Laplace_W_Poly6(rSquare);
         }
 
+
         // 혹시 영향을 주는 파티클을 모두 만났으면, 더이상 검색할 필요 없다
         if(countCheck >= pData[myId].neighbor) break;
     }
 
     // 압력, 점성에 의한 힘 저장
     pData[myId].force = (PressureForce + ViscosityForce);
-    // surface normal 저장
+
+    // surface data 저장
     pData[myId].surfNormal = SurfaceNormal;
     pData[myId].isSurface = 0;
 
@@ -201,14 +210,15 @@ void Update_Fluid_Force(uint myId)
 
 
 
-// 2. 주변 particle 에 관계없이 계산되는 힘
+// 주변 particle 에 영향을 받지 않는, 외력의 합을 계산한다
 void Add_Extra_Force(uint myId)
 {
     vec3 ExtraForce = vec3(0, 0, 0);
     float curDensity = pData[myId].density;
 
+
     // 중력에 의한 힘
-    // 나비에 스톡스 방정식에 의해 ~ 밀도 사용 // 나도 2000 정도 곱해줘야 하나??
+    // 나비에 스톡스 방정식에 의해 ~ 밀도 사용
     ExtraForce += gravityAcel * curDensity;
 
 
@@ -233,16 +243,14 @@ void main()
 {
     // ssbo 에 접근하는 스레드의 인덱스
     uint index = gl_GlobalInvocationID.x;
+    // 스레드 인덱스에 대응하는 particle 데이터가 없으면 종료
+    if(index >= TotalParticleCount) return;
 
-    // 1. 영향을 받는 힘을 구하고
+
+
+    // 1. 주변 파티클들에 영향을 받는 힘을 구하고
     Update_Fluid_Force(index);
 
-
-    // 2. 영향을 안 받는 힘을 구한다
+    // 2. 주변 파티클들에 영향을 안 받는 힘을 구한다
     Add_Extra_Force(index);
-
-
-    //if(dot( pData[index].surfNormal, vec3(0, 1, 0) ) > controlValue)
-    // if(pData[index].surfNormal.y > -controlValue)
-    //     pData[index].isSurface = 0;
 }

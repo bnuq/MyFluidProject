@@ -155,34 +155,14 @@ private:
     // 6. Wave Power
         float wavePower = 3.0f;
 
-
-
-
-
-
-
-        // 5. Delta Time
+    // 7. Delta Time
         float deltaTime = 0.008f;
 
-        // 6. Damping
+    // 8. Damping
         float damping   = 0.01f;
 
-        // 7. Visible
-        // unsigned int neighborLevel = 4;
-        // int tempNei = 4;
-        float neighborLevel = 0.0005f;
-        float tempNei = 4;
-
-
-        float correction = 0.1f;
-
-
-        float visibleCoeffi = 1.1f;
-        float visibleThre   = 3.8f;
-
-
-        float controlValue = 0.55f;
-        float ratio = 0.4f;
+    // 9. 렌더링할 때 프레그먼트와 픽셀 사이 깊이 값 비교 오차
+        float offset = 0.001f;
 
 
 
@@ -203,8 +183,7 @@ private:
     float cameraFar = 80.0f;
     
 
-    // 5 => 렌더링할 때 프레그먼트와 픽셀 사이 깊이 값 비교 오차
-    float offset = 0.001f;
+    
 };
 
 #endif // __CONTEXT_H__

@@ -4,11 +4,17 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 
 
-uniform float deltaTime;
+// Particle Data
+    uniform float TotalParticleCount;
+    uniform vec3 LimitRange;
 
-uniform vec3 LimitRange;
-uniform float damping;
+// Delta Time
+    uniform float deltaTime;
 
+// Collision
+    uniform float damping;
+
+// Camera
 uniform vec3 CameraPos;
 
 
@@ -20,14 +26,16 @@ uniform vec3 CameraPos;
 
     velocity                    new velocity
 
+                                new toCamera
     range                       
     density                     
     pressure                    
 
     force                   
     neighbor                    
-                                new toCamera
-                                -
+
+    surfNormal
+    isSurface
  */
 struct CoreParticle
 {
@@ -40,8 +48,6 @@ struct CoreParticle
     float zvel;
 
     float toCamera;
-
-    uint visible;
 };
 layout(std430, binding = 1) buffer CoreParticleBuffer
 {
@@ -77,15 +83,23 @@ void main()
 {
     // 동일하게 하나의 그룹은 x 축 방향만 가지고 있고, x 축 방향 그룹만 존재한다고 생각
     uint index = gl_GlobalInvocationID.x;
+    // 해당하는 particle 이 없으면 종료
+    if(index >= TotalParticleCount) return;
 
 
-    // 일단 속도, 위치를 변화시키고
+
+    // 알짜힘 -> 속도 변화 -> 위치 변화
     pData[index].velocity.xyz += deltaTime * (pData[index].force.xyz / pData[index].density);
     pData[index].position.xyz += deltaTime * pData[index].velocity.xyz;
 
 
-    // 경계 체크 => 속도, 위치를 적적하게 변화시킨다
-    // 경계를 벗어난 파티클 => 돌아가야 하는 경계를 가리키는 벡터
+    /* 
+        새롭게 구한 위치에 대해서 <- 경계를 벗어났는 지 체크
+        벗어난 경우
+            위치 => 경계 내부로 되돌리고
+            속도 => 내부를 향하는 속도를 가지게 한다 + 속도의 크기를 줄인다( 충돌 했으니까 )
+     */
+    // OverVec => 경계면에서 벗어난 particle 이 경계면을 향하는 벡터
     vec3 OverVec = vec3(0, 0, 0);
 
     // 경계를 벗어난 경우를 찾고, 그에 맞게 돌아가야 하는 방향을 찾는다
@@ -93,18 +107,22 @@ void main()
     if     (pData[index].position.x < 0)                    OverVec.x -= pData[index].position.x;
     else if(pData[index].position.x > LimitRange.x)         OverVec.x += LimitRange.x - pData[index].position.x;
     
-    // 바닥에 깔리는 경우 => 안보이게 하고 싶다
     if     (pData[index].position.y < 0)                    OverVec.y -= pData[index].position.y;
     else if(pData[index].position.y > LimitRange.y)         OverVec.y += LimitRange.y - pData[index].position.y;
 
     if     (pData[index].position.z < 0)                    OverVec.z -= pData[index].position.z;
     else if(pData[index].position.z > LimitRange.z)         OverVec.z += LimitRange.z - pData[index].position.z;
 
-    // 들어오는 벡터가 0 이 아닌 경우 => 벗어남이 존재한다
+    
+    // 들어오는 벡터가 0 이 아닌 경우 == 경계를 벗어난 경우
     if(length(OverVec) != 0)
     {
-        pData[index].velocity.xyz = normalize(OverVec) * damping;    // 속도를 강제로 들어오는 방향으로 설정
-        pData[index].position.xyz += (1.00001) * OverVec;            // 위치를 강제로 영역 내부로 넣어버린다
+        // 위치 => 강제로 내부로 들어오게 하고
+        pData[index].position.xyz += (1.001) * OverVec;
+
+        // 속도 => OverVec 를 법선벡터로, 기존의 속도를 반사시키자
+        // 충돌로 인해 속도가 줄어들테니, damping 값으로 조절한다
+        pData[index].velocity.xyz = reflect(pData[index].velocity.xyz, normalize(OverVec)) * damping;
     }
 
 
@@ -124,4 +142,6 @@ void main()
     // 3. update toCamera
     cData[index].toCamera = distance(CameraPos, pData[index].position.xyz);
 
+
+    cData[index].yvel = -100.0;
 }

@@ -5,7 +5,7 @@
 glm::vec3 Particle::FluidRange = glm::vec3(34, 20, 17);
 
 // 한 축을 구성하는 파티클의 개수
-glm::uvec3 Particle::ParticleCount = glm::uvec3(32, 16, 16);
+glm::uvec3 Particle::ParticleCount = glm::uvec3(4, 4, 4);
 
 // 전체 파티클의 개수
 unsigned int Particle::TotalParticleCount = (Particle::ParticleCount.x) * (Particle::ParticleCount.y) * (Particle::ParticleCount.z);

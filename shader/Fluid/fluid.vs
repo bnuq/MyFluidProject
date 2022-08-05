@@ -4,23 +4,25 @@ layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 aNormal;
 
 
-struct CoreParticle
+struct Particle
 {
-    float xpos;
-    float ypos;
-    float zpos;
+    vec4 position;
 
-    float xvel;
-    float yvel;
-    float zvel;
+    vec4 velocity;
 
-    float toCamera;
+    uvec2 range;
+    float density;
+    float pressure;
 
-    uint visible;
+    vec3 force;
+    uint neighbor;
+
+    vec3 surfNormal;
+    uint isSurface;
 };
-layout(std430, binding = 1) buffer CoreParticleBuffer
+layout(std430, binding = 2) buffer ParticleBuffer
 {
-    CoreParticle cData[];
+    Particle pData[];
 };
 
 
@@ -36,8 +38,8 @@ out float ViewRatio;            // 카메라에서 보이는 정도
 
 void main()
 {
-    // 현재 정점이 속한 core particle instance 를 찾는다
-    CoreParticle curParticle = cData[gl_InstanceID];
+    // 현재 정점이 속한 particle instance 를 찾는다
+    Particle curParticle = pData[gl_InstanceID];
 
 
     // 모델 좌표계 -> 월드 좌표계, 변환
@@ -45,7 +47,7 @@ void main()
             1.0, 0.0, 0.0, 0.0,
             0.0, 1.0, 0.0, 0.0,
             0.0, 0.0, 1.0, 0.0,
-            curParticle.xpos, curParticle.ypos, curParticle.zpos, 1.0
+            curParticle.position.x, curParticle.position.y, curParticle.position.z, 1.0
         );
 
 
@@ -53,8 +55,15 @@ void main()
     gl_Position = ClipPos;
 
 
+    // 월드 좌표계에서의 값
+    vec3 WorldPos = ( modelTransform * vec4(aPos, 1.0) ).xyz;
+    vec3 WorldNormal = aNormal;  // 모델변환에 이동만 있으므로, 노멀 벡터는 동일하다
+
+    
     // 정점에서 카메라를 바라보는 뷰 벡터
-    vec3 ViewVec = CameraPos - vec3(curParticle.xpos, curParticle.ypos, curParticle.zpos);
-    ViewVec = normalize(ViewVec);
-    ViewRatio = dot(aNormal, ViewVec);
+    vec3 ViewVec = normalize(CameraPos - WorldPos);
+    
+
+    // 카메라에서 해당 정점이 보이는 정도
+    ViewRatio = dot(WorldNormal, ViewVec);
 }

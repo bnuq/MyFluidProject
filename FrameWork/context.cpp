@@ -283,27 +283,14 @@ void Context::Render()
         // 6. Wave Poser
             ImGui::DragFloat("wavePower", &wavePower);
 
+        // 7. Delta Time
+            ImGui::DragFloat("deltaTime", &deltaTime);
 
+        // 8. Collision
+            ImGui::DragFloat("damping", &damping);
 
-
-
-
-
-        ImGui::DragFloat("deltaTime", &deltaTime);
-        ImGui::DragFloat("damping", &damping);
-
-
-
-        
-        ImGui::DragFloat("neighborLevel", &neighborLevel, 0.001, 0);
-        ImGui::DragFloat("correction", &correction, 0.0001, 0);
-
-        ImGui::DragFloat("visible coeffi", &visibleCoeffi, 0.0001, 1);
-        ImGui::DragFloat("visible thre", &visibleThre, 0.0001, 1);
-
-
-        ImGui::DragFloat("controlValue", &controlValue, 0.0001, 3);
-        ImGui::DragFloat("ratio", &ratio, 0.0001, 1);
+        // 9. Renderings
+            ImGui::DragFloat("offset", &offset, 0.01f, 0);
     }
 
     // 깊이 맵 확인
@@ -311,7 +298,7 @@ void Context::Render()
     ImGui::DragFloat("cameraNear", &cameraNear, 0.01f, 0);
     ImGui::DragFloat("cameraFar", &cameraFar, 0.01f, 0);
 
-    ImGui::DragFloat("offset", &offset, 0.01f, 0);
+
 
     ImGui::End();
 
@@ -399,7 +386,7 @@ void Context::Get_Force()
 
         // Particle Data
             ForceCompute->SetUniform("particleMass", Particle::ParticleMass);
-            ForceCompute->SetUniform("particleCount", Particle::TotalParticleCount);
+            ForceCompute->SetUniform("TotalParticleCount", Particle::TotalParticleCount);
             ForceCompute->SetUniform("xRange", Particle::FluidRange.x);
             ForceCompute->SetUniform("yRange", Particle::FluidRange.y);
         
@@ -439,51 +426,54 @@ void Context::Get_Force()
 void Context::Get_Move()
 {
     MoveCompute->Use();
-        /* Uniform Variable 넣기 */
-        MoveCompute->SetUniform("deltaTime", deltaTime);
-        MoveCompute->SetUniform("LimitRange", Particle::FluidRange);
-        MoveCompute->SetUniform("damping", damping);
 
-        MoveCompute->SetUniform("surfThreshold", surfThreshold);
+        // Particle Data
+            MoveCompute->SetUniform("TotalParticleCount", Particle::TotalParticleCount);
+            MoveCompute->SetUniform("LimitRange", Particle::FluidRange);
 
+        // Delta Time
+            MoveCompute->SetUniform("deltaTime", deltaTime);
 
-        //if(tempNei >= 0) neighborLevel = (unsigned int)tempNei;
-        MoveCompute->SetUniform("neighborLevel", neighborLevel);
-        
-        // 현재 카메라의 위치를 Uniform 으로 설정
-        // Particle 이 최종적으로 움직인 위치에서 카메라까지의 거리를 구해야 한다
-        MoveCompute->SetUniform("CameraPos", MainCam->Position);
+        // Collision
+            MoveCompute->SetUniform("damping", damping);
 
+        // Camera
+            MoveCompute->SetUniform("CameraPos", MainCam->Position);
 
         glDispatchCompute(Particle::GroupNum, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         
-        // 움직임 => 새로운 위치를 얻고나서, toCamera 값이 바뀌었으므로 정렬을 새로 해준다
+        // 새롭게 계산한 Core Particle 데이터 => 카메라까지 거리에 맞춰서 정렬을 다시 해준다
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, CoreParticleBuffer->Get());
+
             // 연산 결과, Output 을 CPU 로 읽어오고
             glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
 
             // Camera 까지의 거리를 기준으로 sort
             std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_toCamera_Compare());
 
-            // 다시 넣어준다
+            SPDLOG_INFO("{}, {}, {}", CoreParticleArray[0].xvel, CoreParticleArray[0].yvel, CoreParticleArray[0].zvel);
+
+            // 다시 넣어준다 => 다음 프레임 때 input 으로 사용한다
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(CoreParticle) * CoreParticleArray.size(), CoreParticleArray.data());
+
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
 
     glUseProgram(0);
 }
 
 
-void Context::Draw_GPU_Instancing(const glm::mat4& projection, const glm::mat4& view)
+
+
+void Context::Make_Depth_Map(const glm::mat4& projection, const glm::mat4& view)
 {
     // 화면에 그리지 않고, shadow map 에 그려서, 카메라에서 봤을 때 각 픽셀 depth 값을 텍스처에 저장한다
     depthFrameBuffer->Bind();
         
         glClear(GL_DEPTH_BUFFER_BIT);
-
-        // view port 설정
-        glViewport
+        glViewport  // view port 설정
         (
             0, 
             0,
@@ -491,14 +481,15 @@ void Context::Draw_GPU_Instancing(const glm::mat4& projection, const glm::mat4& 
             depthFrameBuffer->GetShadowMap()->GetHeight()
         );
 
-        SimpelProgram->Use();
+        MakeDepthMap->Use();
 
-            SimpelProgram->SetUniform("transform", projection * view);
-            SimpelProgram->SetUniform("MainColor", glm::vec3(1,1,0));
+            // vertex shader
+                MakeDepthMap->SetUniform("transform", projection * view);
 
-            BoxMesh->GPUInstancingDraw(SimpelProgram.get(), Particle::TotalParticleCount);
+            BoxMesh->GPUInstancingDraw(MakeDepthMap.get(), Particle::TotalParticleCount);
 
         glUseProgram(0);
+
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     glViewport(0, 0, m_width, m_height);
@@ -513,13 +504,11 @@ void Context::Draw_Particles(const glm::mat4& projection, const glm::mat4& view)
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    // output 버퍼에 저장된 데이터를 이용해서, Particles 를 그린다
+    // Particle Buffer 에 저장된 데이터를 이용해서, Particles 를 그린다
     DrawProgram->Use();
         
-        auto transform = projection * view;
-
         // vertex shader
-            DrawProgram->SetUniform("transform", transform);
+            DrawProgram->SetUniform("transform", projection * view);
             DrawProgram->SetUniform("CameraPos", MainCam->Position);
 
         // fragment shader
