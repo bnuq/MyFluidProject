@@ -2,9 +2,7 @@
 #define __CONTEXT_H__
 
 #include <imgui.h>
-#include <vector>
-#include <map>
-#include <deque>
+#include <vector>                   // CPU 내 데이터 저장
 
 
 #include "common.h"
@@ -61,6 +59,7 @@ private:
     glm::vec3 m_cameraPos { glm::vec3(0.0f, 2.5f, 8.0f) }; // 일단 light 계산에 사용
     bool m_cameraControl { false };
 
+
     // 빛, 라이트
     struct Light
     {
@@ -84,21 +83,17 @@ private:
     /**********************************************************************************/
     
     // Programs
-    ProgramUPtr DensityPressureCompute;     // 밀도와 압력만 먼저 계산
-    ProgramUPtr ForceCompute;               // 입자의 알짜힘 계산
-    ProgramUPtr MoveCompute;                // 유체 움직이기
-    ProgramUPtr VisibleCompute;             // 보이는 것 결정하기
+    ProgramUPtr DensityPressureCompute;     // 1. 밀도와 압력만 먼저 계산
+    ProgramUPtr ForceCompute;               // 2. 입자의 알짜힘 계산
+    ProgramUPtr MoveCompute;                // 3. 유체 움직이기
 
-    ProgramUPtr SimpelProgram;              // 단색으로 칠하는 simple program
-    ProgramUPtr DrawProgram;                // 유체 그리기
-
-
+    ProgramUPtr MakeDepthMap;               // 4. 카메라 입장에서 렌더링 ~ depth map 을 만든다
+    ProgramUPtr DrawProgram;                // 5. 화면에 실제로 유체를 그린다
 
     // Compute Shaders
-    ShaderPtr FluidDensityPressure;          // 밀도, 압력 계산 compute shader
-    ShaderPtr FluidForce;                    // 알짜힘을 계산하는 compute shader
-    ShaderPtr FluidMove;                     // 유체의 움직임을 계산하는 compute Shader
-    ShaderPtr FluidVisible;                  // 파티클 중, 눈에 보이는 것을 찾는 compute shader
+    ShaderPtr FluidDensityPressure;          // 1. 밀도, 압력 계산 compute shader
+    ShaderPtr FluidForce;                    // 2. 알짜힘을 계산하는 compute shader
+    ShaderPtr FluidMove;                     // 3. 유체의 움직임을 계산하는 compute Shader
 
 
 
@@ -106,9 +101,9 @@ private:
     // CPU 에서 Core Particle 데이터를 저장하는 배열 => 프레임이 바뀌어도 저장되어야 하는 정보들로 구성
     std::vector<CoreParticle> CoreParticleArray{};
 
-
     // Core Particle 들의 초기 위치 값을 넣는 함수
     void Init_CoreParticles();
+
 
 
     // Core Particle ~ 카메라 까지의 거리로 정렬하는 function object
@@ -120,66 +115,51 @@ private:
             return p1.toCamera > p2.toCamera;
         }
     };
+    CoreParticle_toCamera_Compare cpCompare{};
 
-
-    // 파티클들을 렌더링하기 전에, visible 데이터를 이용해서 정렬하는 function object
-    struct CoreParticle_visible_Compare
-    {
-        bool operator()(const CoreParticle& p1, const CoreParticle& p2)
-        {
-            // 둘다 보이는 경우
-            if(p1.visible != 0 && p2.visible != 0)
-                // 카메라 거리를 이용, 거리가 더 먼 것이 앞으로 온다
-                return p1.toCamera > p2.toCamera;
-            else
-                // 그 이외에는 보이는 것이 앞으로 오게 정렬한다
-                return p1.visible > p2.visible;
-        }
-    };
-    
-
-    // visible core particles 의 갯수
-    unsigned int visibleCount = 0;
 
 
     /*  
         SSBO Buffer
      */
-    BufferPtr CoreParticleBuffer;       // Core Particle 데이터를 저장, 해당 타입으로 데이터를 주고 받는다
-    BufferPtr ParticleBuffer;           // Particle 데이터, GPU 내에서만 저장하고 사용
-    BufferPtr CountBuffer;              // visible count 값을 읽어오는 버퍼
-
+    BufferPtr CoreParticleBuffer;                   // Core Particle 데이터를 저장, 해당 타입으로 데이터를 주고 받는다
+    BufferPtr ParticleBuffer;                       // Particle 데이터, GPU 내에서만 저장하고 사용
 
     unsigned int CoreParticle_Index  = 1;
     unsigned int Particle_Index  = 2;
-    unsigned int Count_Index = 5;
 
 
 
     // 각 프로그램에서 필요로 하는 Uniform Variables
-        // 1. Smooth Kernel
+    // 1. Smooth Kernel
         float SmoothKernelRadius = 1.0f;
-        //float SmoothKernelRadius = 10.0f;
         
-        // 2. Gas
-        struct Gas
+    // 2. Pressure Data
+        struct PressureData
         {
             float gasCoeffi   = 0.001f;
-            //float restDensity = 1200.0f;
             float restDensity = 50.0f;
         };
-        Gas gas;
+        PressureData PD;
 
-        // 3. Viscosity
-        float viscosity     = 1.0f;
+    // 3. Viscosity
+        float viscosity       = 1.0f;
 
-        // 3.5 Surface
-        //float threshold     = 0.8f;
-        float threshold     = 0.1f;
-        float surfCoeffi    = 0.1f;
+    // 4. Surface
+        float surfThreshold   = 0.1f;
+        float surfCoeffi      = 0.1f;
 
-        // 4. Gravity
+    // 5. Gravity
         glm::vec3 gravityAcel = glm::vec3(0.0f, -10.0f, 0.0f);
+    
+    // 6. Wave Power
+        float wavePower = 3.0f;
+
+
+
+
+
+
 
         // 5. Delta Time
         float deltaTime = 0.008f;
@@ -204,24 +184,27 @@ private:
         float controlValue = 0.55f;
         float ratio = 0.4f;
 
+
+
+
     // Program 실행 함수
-    void Get_Density_Pressure();
-    void Get_Force();
-    void Get_Move();
-    void Find_Visible(const glm::mat4& projection, const glm::mat4& view);
-    void Draw_Particles(const glm::mat4& proj, const glm::mat4& view);
-    // GPU Instancing 을 통해서, 여러 파티클들을 한번에 그리는 함수
-    // Simple Program 이용
-    void Draw_GPU_Instancing(const glm::mat4& proj, const glm::mat4& view);
+    void Get_Density_Pressure();                    // 1
+    void Get_Force();                               // 2
+    void Get_Move();                                // 3
+
+    void Make_Depth_Map(const glm::mat4& proj, const glm::mat4& view);  // 4
+    void Draw_Particles(const glm::mat4& proj, const glm::mat4& view);  // 5
 
 
-    // 카메라 입장에서 깊이 값을 먼저 그리는 shadow map
+
+    // 4 => 카메라 입장에서 깊이 값을 먼저 그리는 shadow map
     ShadowMapPtr depthFrameBuffer{};
     float cameraNear= 15.0f;
     float cameraFar = 80.0f;
     
 
-    float offset = 0.015f;
+    // 5 => 렌더링할 때 프레그먼트와 픽셀 사이 깊이 값 비교 오차
+    float offset = 0.001f;
 };
 
 #endif // __CONTEXT_H__

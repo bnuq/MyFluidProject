@@ -3,19 +3,21 @@
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 
-// Smooth Kernel 관련 Uniform Variables
-uniform float h;
-uniform float hSquare;
+// Smooth Kernel
+    uniform float h;
 
-uniform float particleMass;
-uniform uint TotalParticleCount;
+// Particle Data
+    uniform float particleMass;
+    uniform uint TotalParticleCount;
 
-uniform float gasCoeffi;
-uniform float restDensity;
+// Pressure Data
+    uniform float gasCoeffi;
+    uniform float restDensity;
 
 
 
 #define PI 3.1415
+#define hSquare (h * h)
 /* 
     W_poly6 -> 변수인 r 의 제곱을 사용한다
     사용처
@@ -24,10 +26,10 @@ uniform float restDensity;
 float W_Poly6(float r2) { return (315.0 / (64 * PI * pow(abs(h), 9.0) ) ) * pow(abs(hSquare - r2), 3); }
 
 
+
 /*
     입력 : Core Particle Buffer
-        정렬된 버퍼
-        파티클 ~ 카메라 거리, toCamera 값으로 정렬
+        파티클 ~ 카메라 거리, toCamera 값으로 정렬되어 있는 버퍼
         Far -> Near 순서로 정렬
 
     [Core Particle]           [Particle]
@@ -41,9 +43,11 @@ float W_Poly6(float r2) { return (315.0 / (64 * PI * pow(abs(h), 9.0) ) ) * pow(
     -                         pressure          4
 
     toCamera
-    visible  ~> 버리고
                               -
                               neighbor          4
+
+                              -
+                              -
  */
 struct CoreParticle
 {
@@ -56,8 +60,6 @@ struct CoreParticle
     float zvel;
 
     float toCamera;
-
-    uint visible;
 };
 layout(std430, binding = 1) buffer CoreParticleBuffer
 {
@@ -107,6 +109,9 @@ void main()
 {
     // ssbo 에 접근하는 스레드의 인덱스
     uint index = gl_GlobalInvocationID.x;
+    // 만약 스레드 인덱스에 해당하는  Core Particle 이 없다면 종료한다
+    if(index >= TotalParticleCount) return;
+
 
 
     // 1. update position
@@ -175,13 +180,17 @@ void main()
         // 실제 영향 여부는 직접 체크해야 한다
         if(NeiDistance < h)
         {
+            // 밀도 값 구하고
             newDensity  += particleMass * W_Poly6(NeiDistance * NeiDistance);
+
+            // 실제 영향을 주는 이웃 개수도 구한다
             newNeighbor += 1;
         }
     }
 
     // 새롭게 구한 밀도 -> 새로운 압력 구함
     newPressure = gasCoeffi * max(newDensity - restDensity, 0.0);
+
 
     pData[index].density  = newDensity;
     pData[index].pressure = newPressure;

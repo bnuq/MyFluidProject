@@ -41,16 +41,16 @@ bool Context::Init()
 
 
 
-    // 5. Shadow Map 에 Particles 를 무조건 그린다 => 그려지는 깊이를 먼저 기록
-    SimpelProgram = Program::Create("./shader/Simple/simple.vs", "./shader/Simple/simple.fs");
-    if(!SimpelProgram) return false;
+    // 4. Shadow Map 에 Particles 를 무조건 그린다 => 그려지는 깊이를 먼저 기록
+    MakeDepthMap = Program::Create("./shader/Simple/simple.vs", "./shader/Simple/simple.fs");
+    if(!MakeDepthMap) return false;
 
         // shadow map
         depthFrameBuffer = ShadowMap::Create(1024, 1024);
 
 
 
-    // 6. 실제 색깔을 렌더링, depth map 을 참고해서 나타낼 픽셀을 찾는다
+    // 5. 실제 색깔을 렌더링, depth map 을 참고해서 나타낼 픽셀을 찾는다
     DrawProgram = Program::Create("./shader/Fluid/fluid.vs", "./shader/Fluid/fluid.fs");
     if(!DrawProgram) return false;
 
@@ -77,7 +77,7 @@ bool Context::Init()
 
 
 
-    // GPU 에서 데이터를 저장할 SSBO 버퍼를 생성
+    // GPU 에서 데이터를 저장할 SSBO 버퍼를 생성 및 할당
     // Core Particle => 데이터를 복사해서 GPU 에 넣는다
     // 정렬된 데이터를 넣는다
     CoreParticleBuffer
@@ -89,15 +89,10 @@ bool Context::Init()
         = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, NULL, sizeof(Particle), CoreParticleArray.size());
 
 
-    CountBuffer 
-        = Buffer::CreateWithData(GL_SHADER_STORAGE_BUFFER, GL_DYNAMIC_DRAW, &visibleCount, sizeof(unsigned int), 1);
-
-
     
     /* SSBO 버퍼를 각 인덱스에 바인딩 */
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, CoreParticle_Index, CoreParticleBuffer->Get());
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Particle_Index,     ParticleBuffer->Get());
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Count_Index,        CountBuffer->Get());
 
     
     
@@ -123,14 +118,14 @@ bool Context::Init()
         glShaderStorageBlockBinding(MoveCompute->Get(), blockIndex, CoreParticle_Index);
 
 
-    // 4. Make Depth Map
-        blockIndex = glGetProgramResourceIndex(SimpelProgram->Get(), GL_SHADER_STORAGE_BUFFER, "CoreParticleBuffer");
-        glShaderStorageBlockBinding(SimpelProgram->Get(), blockIndex, CoreParticle_Index);
+    // 4. Make Depth Map    => Core Particle 사용
+        blockIndex = glGetProgramResourceIndex(MakeDepthMap->Get(), GL_SHADER_STORAGE_BUFFER, "CoreParticleBuffer");
+        glShaderStorageBlockBinding(MakeDepthMap->Get(), blockIndex, CoreParticle_Index);
 
 
-    // 5. Rendering
-        blockIndex = glGetProgramResourceIndex(DrawProgram->Get(), GL_SHADER_STORAGE_BUFFER, "CoreParticleBuffer");
-        glShaderStorageBlockBinding(DrawProgram->Get(), blockIndex, CoreParticle_Index);
+    // 5. Rendering         => Particle 데이터 사용, 왜냐하면 다른 여러가지 결과물이 필요하니까?
+        blockIndex = glGetProgramResourceIndex(DrawProgram->Get(), GL_SHADER_STORAGE_BUFFER, "ParticleBuffer");
+        glShaderStorageBlockBinding(DrawProgram->Get(), blockIndex, Particle_Index);
 
 
 
@@ -171,7 +166,7 @@ void Context::Init_CoreParticles()
 
     // 카메라까지의 거리를 기준으로 정렬한다 => 멀리 있는 것이 앞으로 온다
     // 처음부터 아예 정렬을 하고 시작
-    std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), CoreParticle_toCamera_Compare());
+    std::sort(CoreParticleArray.begin(), CoreParticleArray.end(), cpCompare);
 }
 
 
@@ -265,21 +260,39 @@ void Context::Render()
 
     if(ImGui::Begin("Smooth Kernel"))
     {
-        ImGui::DragFloat("Smooth Kernel Radius", &SmoothKernelRadius, 0.001f, 0.01f);
+        // 1. Smmoth Kernel
+            ImGui::DragFloat("Smooth Kernel Radius", &SmoothKernelRadius, 0.001f, 0.01f);
+
+        // Particle Data
+            ImGui::DragFloat("particle mass", &Particle::ParticleMass, 0.001f, 0.0f);
+
+        // 2. Pressure
+            ImGui::DragFloat("Gas Coeffi", &PD.gasCoeffi);
+            ImGui::DragFloat("Gas RestDensity", &PD.restDensity);
+
+        // 3. Viscosity
+            ImGui::DragFloat("viscosity", &viscosity);
+
+        // 4. Surface
+            ImGui::DragFloat("surfThreshold", &surfThreshold, 0.001f, 0.0f);
+            ImGui::DragFloat("surfCoeffi", &surfCoeffi, 0.001f, 0.0f);
+
+        // 5. Gravity
+            ImGui::DragFloat4("gravityAcel", glm::value_ptr(gravityAcel));
+
+        // 6. Wave Poser
+            ImGui::DragFloat("wavePower", &wavePower);
 
 
-        ImGui::DragFloat("Gas Coeffi", &gas.gasCoeffi);
-        ImGui::DragFloat("Gas RestDensity", &gas.restDensity);
-
-        ImGui::DragFloat("viscosity", &viscosity);
 
 
-        ImGui::DragFloat4("gravityAcel", glm::value_ptr(gravityAcel));
+
+
 
         ImGui::DragFloat("deltaTime", &deltaTime);
         ImGui::DragFloat("damping", &damping);
 
-        ImGui::DragFloat("threshold", &threshold, 0.001f, 0.0f);
+
 
         
         ImGui::DragFloat("neighborLevel", &neighborLevel, 0.001, 0);
@@ -291,9 +304,6 @@ void Context::Render()
 
         ImGui::DragFloat("controlValue", &controlValue, 0.0001, 3);
         ImGui::DragFloat("ratio", &ratio, 0.0001, 1);
-
-
-        ImGui::Text("Visible Count is %d", visibleCount);
     }
 
     // 깊이 맵 확인
@@ -332,32 +342,29 @@ void Context::Render()
     Get_Force();                                        // 2. 각 입자들의 알짜힘을 구한다
     Get_Move();                                         // 3. 알짜힘에 맞춰 이동 -> 최종 위치와 속도를 결정
 
-
-    Draw_GPU_Instancing(projection, view);              // 4. 일단 Depth map 에 렌더링 => Depth Map 을 생성하고
-
-
-
+    Make_Depth_Map(projection, view);                   // 4. 일단 Depth map 에 렌더링 => Depth Map 을 생성하고
     Draw_Particles(projection, view);                   // 5. 최종적으로 visible particle 들만 렌더링
 }
 
 
 
 
-// Program 실행
+// Core Particle 을 input 으로 사용 => 무조건 여기서 값을 꺼내와서 사용한다
+// Particle 은 output => 무조건 이곳에 저장한다
 void Context::Get_Density_Pressure()
 {
     DensityPressureCompute->Use();
-        // Set Uniforms
-        DensityPressureCompute->SetUniform("h", SmoothKernelRadius);
-        DensityPressureCompute->SetUniform("hSquare", SmoothKernelRadius * SmoothKernelRadius);
+        
+        // Smmoth Kernel
+            DensityPressureCompute->SetUniform("h", SmoothKernelRadius);
 
-        DensityPressureCompute->SetUniform("particleMass", Particle::ParticleMass);
-        DensityPressureCompute->SetUniform("TotalParticleCount", Particle::TotalParticleCount);
+        // Particle Data
+            DensityPressureCompute->SetUniform("particleMass", Particle::ParticleMass);
+            DensityPressureCompute->SetUniform("TotalParticleCount", Particle::TotalParticleCount);
 
-        DensityPressureCompute->SetUniform("gasCoeffi", gas.gasCoeffi);
-        DensityPressureCompute->SetUniform("gasCoeffi", gas.restDensity);
-
-        DensityPressureCompute->SetUniform("correction", correction);
+        // Pressure Data
+            DensityPressureCompute->SetUniform("gasCoeffi", PD.gasCoeffi);
+            DensityPressureCompute->SetUniform("restDensity", PD.restDensity);
 
         glDispatchCompute(Particle::GroupNum, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
@@ -380,45 +387,51 @@ void Context::Get_Density_Pressure()
 }
 
 
+
+// 계산이 완료된 Particle 데이터를 input 으로 사용
+// 채워지지 않은 Particle 데이터를 output 으로 채운다
 void Context::Get_Force()
 {
     ForceCompute->Use();
-        // Set Uniforms
-        // 0
-        ForceCompute->SetUniform("h", SmoothKernelRadius);
-        ForceCompute->SetUniform("hSquare", SmoothKernelRadius * SmoothKernelRadius);
 
-        ForceCompute->SetUniform("particleMass", Particle::ParticleMass);
-        ForceCompute->SetUniform("particleCount", Particle::TotalParticleCount);
+        // Smmoth Kernel
+            ForceCompute->SetUniform("h", SmoothKernelRadius);
+
+        // Particle Data
+            ForceCompute->SetUniform("particleMass", Particle::ParticleMass);
+            ForceCompute->SetUniform("particleCount", Particle::TotalParticleCount);
+            ForceCompute->SetUniform("xRange", Particle::FluidRange.x);
+            ForceCompute->SetUniform("yRange", Particle::FluidRange.y);
         
-        // 1
-        ForceCompute->SetUniform("viscosity", viscosity);
+        // Viscosity
+            ForceCompute->SetUniform("viscosity", viscosity);
 
-        ForceCompute->SetUniform("threshold", threshold);
-        ForceCompute->SetUniform("surfCoeffi", surfCoeffi);
+        // Surface
+            ForceCompute->SetUniform("surfThreshold", surfThreshold);
+            ForceCompute->SetUniform("surfCoeffi", surfCoeffi);
 
-        // 2
-        ForceCompute->SetUniform("gravityAcel", gravityAcel);
+        // Gravity
+            ForceCompute->SetUniform("gravityAcel", gravityAcel);
 
-        ForceCompute->SetUniform("xRange", Particle::FluidRange.x);
-        ForceCompute->SetUniform("yRange", Particle::FluidRange.y);
-        ForceCompute->SetUniform("time", (float)glfwGetTime());
-        ForceCompute->SetUniform("wavePower", 3.0f);
-
-        
-
+        // Mouse Force
         // 마우스 좌클릭이 없는데, 힘이 있을 때, 힘을 넘기고 힘 초기화
-        if(!m_giveForceMouse && (glm::length(mouseForce) != 0))
-        {
-            ForceCompute->SetUniform("mouseForce", mouseForce);
-            mouseForce = glm::vec2(0);
-        }
-        else
-            ForceCompute->SetUniform("mouseForce", glm::vec2(0));
+            if(!m_giveForceMouse && (glm::length(mouseForce) != 0))
+            {
+                ForceCompute->SetUniform("mouseForce", mouseForce);
+                mouseForce = glm::vec2(0);
+            }
+            else
+                ForceCompute->SetUniform("mouseForce", glm::vec2(0));
 
+        // Wave Force
+            ForceCompute->SetUniform("wavePower", wavePower);
+
+        // Total Time
+        ForceCompute->SetUniform("time", (float)glfwGetTime());
 
         glDispatchCompute(Particle::GroupNum, 1, 1);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
     glUseProgram(0);
 }
 
@@ -431,7 +444,7 @@ void Context::Get_Move()
         MoveCompute->SetUniform("LimitRange", Particle::FluidRange);
         MoveCompute->SetUniform("damping", damping);
 
-        MoveCompute->SetUniform("threshold", threshold);
+        MoveCompute->SetUniform("surfThreshold", surfThreshold);
 
 
         //if(tempNei >= 0) neighborLevel = (unsigned int)tempNei;

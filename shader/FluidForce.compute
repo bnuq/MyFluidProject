@@ -3,39 +3,39 @@
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 
-// Uniform Variables
-// 0
-// Smooth Kernel 관련 정보
+// Smooth Kernel
     uniform float h;
-    uniform float hSquare;
 
-    // Particles 에 대한 정보
+// Particle Data
     uniform float particleMass;
     uniform uint particleCount;
-
-// 1
-    // 점성에 의한 힘
-    uniform float viscosity;
-
-    // 표면 장력 관련
-    uniform float threshold;
-    uniform float surfCoeffi;
-
-
-// 2 => Extra Force
-    uniform vec3 gravityAcel;
-
-    uniform vec2 mouseForce;
-    
     uniform float xRange;
     uniform float yRange;
-    uniform float time;
+
+// Visicosity
+    uniform float viscosity;
+
+// Surface
+    uniform float surfThreshold;
+    uniform float surfCoeffi;
+
+// Gravity
+    uniform vec3 gravityAcel;
+
+// Mouse Force
+    uniform vec2 mouseForce;
+    
+// Wave Power
     uniform float wavePower;
 
-    uniform float controlValue;
+// Total Time
+    uniform float time;
 
-    //smooth kernel 함수들 => 일단 함수로 쓰고, 나중에 MACRO 로 바꿔보자
+
+
+
     #define PI 3.1415
+    #define hSquare (h * h)
     /* 
         Grad_W_Poly6 -> r 제곱을 변수로 사용
                     -> gradient 결과 상대 particle 을 가리키는 벡터를 가진다
@@ -70,7 +70,7 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 
 /*
-    여전히 정렬된 배열 ParticleBuffer
+    여전히 정렬이 보장된 ParticleBuffer
         파티클 ~ 카메라 거리, toCamera 값으로 정렬
         Far -> Near 순서로 정렬
 
@@ -87,6 +87,9 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
                                                     + Surface Force => 표면이라는 게 확정이 되면
                                                     + extra force                      (Update_Extra_Force)
     neighbor                    neighbor
+
+    -                           surfNormal
+    -                           isSurface
  */
 
 struct Particle
@@ -109,6 +112,8 @@ layout(std430, binding = 2) buffer ParticleBuffer
 {
     Particle pData[];
 };
+
+
 
 
 
@@ -185,7 +190,7 @@ void Update_Fluid_Force(uint myId)
     pData[myId].isSurface = 0;
 
     // surface normal 이 일정 크기 이상인 경우
-    if( length(SurfaceNormal) > threshold )
+    if( length(SurfaceNormal) > surfThreshold )
     {
         // 표면 장력을 더한다
         pData[myId].force += (-1) * surfCoeffi * SurfaceForceMag * normalize(SurfaceNormal);

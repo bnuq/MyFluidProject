@@ -4,6 +4,7 @@
 #include "../FrameWork/common.h"
 
 
+// 정렬의 대상이 되는 타입
 // CPU -> GPU 사이로 주고 받는 데이터 형식, 꼭 필요한 것만 넣었다
 class CoreParticle
 {
@@ -14,14 +15,11 @@ class CoreParticle
         xvel = 0.0f;  yvel = 0.0f;  zvel = 0.0f;
 
         toCamera = glm::distance(camPos, pos);
-        visible = 0;
     }
 
     float xpos, ypos, zpos;
     float xvel, yvel, zvel;
-
     float toCamera;
-    unsigned int visible;       // 0 => non-visible, 1 => visible
 };
 
 
@@ -46,6 +44,9 @@ public:
     unsigned int isSurface = 0;                                     // 표면 여부를 확인, surf normal 크기가 일정이상 넘으면 1 을 가진다
 
 
+
+    /* Static Members */
+
     // Fluid 가 담기는 영역
     static glm::vec3 FluidRange;
     
@@ -55,8 +56,10 @@ public:
     // Particle 들의 총 개수
     static unsigned int TotalParticleCount;
 
+
     // 1 group = 32 thread => 필요한 그룹 수
     static unsigned int GroupNum;
+
 
     // Particle 의 질량
     static float ParticleMass;

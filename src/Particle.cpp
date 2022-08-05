@@ -10,8 +10,11 @@ glm::uvec3 Particle::ParticleCount = glm::uvec3(32, 16, 16);
 // 전체 파티클의 개수
 unsigned int Particle::TotalParticleCount = (Particle::ParticleCount.x) * (Particle::ParticleCount.y) * (Particle::ParticleCount.z);
 
+
+
 // 파티클들을 모두 그려내는 데 필요한 그룹 개수
 unsigned int Particle::GroupNum = (Particle::TotalParticleCount % 32 == 0) ? (Particle::TotalParticleCount / 32) : (Particle::TotalParticleCount / 32) + 1;
+
 
 
 // 임의로 1 값을 가진다고 가정
