@@ -123,30 +123,32 @@ void main()
 
 
     // 3. update range
-    uint PossibleFar;         // 가능성이 있는 영역의 파티클 중, 카메라에서 가장 멀리 있는 파티클 인덱스
-    uint PossibleNear;        // 가능성이 있는 영역의 파티클 중, 카메라에서 가장 가까이 있는 파티클 인덱스
+    uint PossibleFar = index;         // 가능성이 있는 영역의 파티클 중, 카메라에서 가장 멀리 있는 파티클 인덱스
+    uint PossibleNear = index;        // 가능성이 있는 영역의 파티클 중, 카메라에서 가장 가까이 있는 파티클 인덱스
     
-    // index => 0 검색, Current Particle 보다 멀리 있는 Particles 를 조사한다
-    for(uint farId = index; farId >= 0; farId--)
+    
+    // index => TotalParticleCount 검색, Current Particle 보다 멀리 있는 Particles 를 조사한다
+    for(uint farId = index; farId < TotalParticleCount; farId++)
     {
-        if(farId == 0)
-        {
-            PossibleFar = 0;
-            break;
-        }
         if(cData[farId].toOrigin >= cData[index].toOrigin + h)    
             break;
         else
             PossibleFar = farId;
     }
 
-    // index => particleCount 검색, Current Particle 보다 가까이 있는 Particles 를 조사한다
+    // index => 0 검색, Current Particle 보다 가까이 있는 Particles 를 조사한다
     if(cData[index].toOrigin - h < 0)   // h 가 긴 경우 => 모든 파티클을 조사
-        PossibleNear = TotalParticleCount - 1;
+        PossibleNear = 0;
     else
     {
-        for(uint nearId = index; nearId < TotalParticleCount; nearId++)
+        for(uint nearId = index; nearId >= 0; nearId--)
         {
+            if(nearId == 0)
+            {
+                PossibleNear = 0;
+                break;
+            }
+
             if(cData[nearId].toOrigin <= cData[index].toOrigin - h)
                 break;
             else
@@ -154,8 +156,10 @@ void main()
         }
     }
 
-    pData[index].range.x = PossibleFar;
-    pData[index].range.y = PossibleNear;
+    // pData[index].range.x = PossibleFar;
+    // pData[index].range.y = PossibleNear;
+    pData[index].range.x = PossibleNear;
+    pData[index].range.y = PossibleFar;
 
 
     // 4. update density, pressure, neighbor

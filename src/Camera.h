@@ -9,7 +9,7 @@ class Camera
 {
 public:
     // 카메라 이동
-    float CameraMoveSpeed = 0.1f;
+    float CameraMoveSpeed = 0.5f;
 
     // 카메라 회전
     float yawRotSpeed { 0.1f };

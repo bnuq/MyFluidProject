@@ -95,8 +95,9 @@ private:
     {
         bool operator()(const CoreParticle& p1, const CoreParticle& p2)
         {
-            // 오로지 파티클 ~ 카메라 사이의 거리를 기준으로 정렬
-            return p1.toOrigin > p2.toOrigin;
+            // Particle ~ 원점 사이의 거리를 기준으로 정렬
+            // 거리가 더 짧은 것이 앞으로 오게 한다
+            return p1.toOrigin < p2.toOrigin;
         }
     };
 
@@ -119,7 +120,7 @@ private:
     // 2. Pressure Data
         struct PressureData
         {
-            float gasCoeffi   = 100.0f;
+            float gasCoeffi   = 50.0f;
             float restDensity = 0.01f;
         };
         PressureData PD;
@@ -141,13 +142,13 @@ private:
         float deltaTime = 0.016f;
 
     // 8. Damping
-        float damping   = 0.95f;
+        float damping   = 0.50f;
 
     // 9. 렌더링할 때 프레그먼트와 픽셀 사이 깊이 값 비교 오차
         float offset = 0.001f;
 
     // 10. Alpha Offset
-        float alphaOffset = 0.4f;
+        float alphaOffset = 0.7f;
 
 
     // Program 실행 함수

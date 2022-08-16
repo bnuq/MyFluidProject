@@ -3,7 +3,7 @@
 #include <vector>
 #include <string>
 #include <algorithm>
-
+#include <random>
 
 ContextUPtr Context::Create()                                  
 {
@@ -138,9 +138,17 @@ bool Context::Init()
 // 정해진 Range 에 Particles 를 집어 넣는다
 void Context::Init_CoreParticles()
 {
+    // random seed
+    std::random_device rd{};
+    // random_device 를 이용, 난수 생성 엔진 초기화
+    std::mt19937 gen(rd());
+    // 균등하게 나타나는 난수열
+    std::uniform_int_distribution<int> dis(1, 99);
+
+
     // Particle::Fluid Range 를 균등하게 나눈다, Particle 들이 들어갈 수 있도록
     float xStride = Particle::FluidRange.x / (Particle::ParticleCount.x + 1);
-    float yStride = Particle::FluidRange.y / (Particle::ParticleCount.y + 1);
+    float yStride = (Particle::FluidRange.y / (Particle::ParticleCount.y + 1)) / 4;
     float zStride = Particle::FluidRange.z / (Particle::ParticleCount.z + 1);
 
 
@@ -150,12 +158,17 @@ void Context::Init_CoreParticles()
         {
             for(unsigned int zCount = 1; zCount <= Particle::ParticleCount.z; zCount++)
             {
+                float ranPos = static_cast<float>(dis(gen)) / 100.0f;
+
                 // Core Particle Initialize
                 CoreParticleArray.push_back
                 ( 
                     CoreParticle
                     (
-                        glm::vec3(xStride * xCount, yStride * yCount, zStride * zCount)
+                        glm::vec3(xStride * xCount + ranPos,
+                                  yStride * yCount, 
+                                  zStride * zCount - ranPos
+                                )
                     )
                 );
             }
@@ -266,30 +279,30 @@ void Context::Render()
             ImGui::DragFloat("particle mass", &Particle::ParticleMass, 0.01f, 0.0f);
 
         // 2. Pressure
-            ImGui::DragFloat("Gas Coeffi", &PD.gasCoeffi, 1.0f, 0);
-            ImGui::DragFloat("Gas RestDensity", &PD.restDensity, 0.001f, 0);
+            ImGui::DragFloat("Gas Coeffi", &PD.gasCoeffi, 0.1f, 0);
+            ImGui::DragFloat("Gas RestDensity", &PD.restDensity, 0.01f, 0);
 
         // 3. Viscosity
-            ImGui::DragFloat("viscosity", &viscosity);
+            ImGui::DragFloat("viscosity", &viscosity, 0.1f, 0);
 
         // 4. Surface
             ImGui::DragFloat("surfThreshold", &surfThreshold, 0.001f, 0.0f);
             ImGui::DragFloat("surfCoeffi", &surfCoeffi, 0.01f, 0.0f);
 
         // 5. Gravity
-            ImGui::DragFloat4("gravityAcel", glm::value_ptr(gravityAcel));
+            ImGui::DragFloat4("gravityAcel", glm::value_ptr(gravityAcel), 0.1f, 0);
 
         // 6. Wave Poser
-            ImGui::DragFloat("wavePower", &wavePower, 1.0f, 0);
+            ImGui::DragFloat("wavePower", &wavePower, 0.01f, 0.0f, 20.0f);
 
         // 7. Delta Time
             ImGui::DragFloat("deltaTime", &deltaTime);
 
         // 8. Collision
-            ImGui::DragFloat("damping", &damping);
+            ImGui::DragFloat("damping", &damping, 0.1f, 0.0f, 1.0f);
 
         // 9. Renderings
-            ImGui::DragFloat("offset", &offset, 0.001f, 0);
+            ImGui::DragFloat("offset", &offset, 0.001f, 0.0f, 1.0f);
 
         // 10. Alpha Offset
             ImGui::DragFloat("alphaOffset", &alphaOffset, 0.01f, 0.0f, 1.0f);
