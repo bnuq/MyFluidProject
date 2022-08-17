@@ -156,8 +156,6 @@ void main()
         }
     }
 
-    // pData[index].range.x = PossibleFar;
-    // pData[index].range.y = PossibleNear;
     pData[index].range.x = PossibleNear;
     pData[index].range.y = PossibleFar;
 
